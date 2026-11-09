@@ -1,0 +1,1309 @@
+---
+title: "Data Science Capstone"
+author: "Veronica Scozzi"
+date: "2025-05-27"
+output: html_document
+---
+
+```{r, echo=FALSE, message = FALSE, warning = FALSE}
+using <- \(pkg) {
+  if (!rlang::is_installed(pkg)) 
+    install.packages(pkg, repo = "https://cloud.r-project.org")
+  library(pkg, character.only = TRUE)
+}
+using("data.table")
+using("plotly")
+using("factoextra")
+using("corrplot")
+using("ggplot2")
+using("GGally")
+using("fpc")
+using("torch")
+using("caret")
+using("yardstick")
+using("tibble")
+library(ranger)
+library(xgboost)
+library(imbalance)
+library(ROSE)
+library(VIM)
+library(mltools)
+library(e1071)
+library(class)
+
+if (cuda_is_available()) {
+    device <- torch_device("cuda")
+} else {
+    device <- torch_device("cpu")
+}
+
+# import the dt:
+dt <- fread("dataset10.csv")
+
+#convert Class from character to factor:
+dt$label <- as.factor(dt$label)
+```
+
+
+```{r, echo=FALSE, message = FALSE, warning = FALSE}
+#let's check if any duplicate is left:
+sum(duplicated(dt))
+
+# check for NAs:
+any(is.na(dt))
+colSums(is.na(dt))
+
+# get rid of observations in class 8:
+dt <- dt[!label=="8", ]
+
+#convert class to numeric:
+dt$label <- as.numeric(dt$label)
+
+# create data partition and declare training and test sets:
+idx <- createDataPartition(dt[,label], p = 0.8, list = F, times = 1)
+training <- dt[idx]
+test <- dt[!idx]
+
+library(dplyr)
+
+min_n <- training %>%
+  group_by(label) %>%
+  summarise(n = n()) %>%
+  pull(n) %>%
+  min()
+
+# Downsampling a min_n per ciascuna classe
+set.seed(42)
+training_bal <- training %>%
+  group_by(label) %>%
+  slice_sample(n = min_n) %>%
+  ungroup()
+
+# create training_x, training_y, test_x, test_y:
+train_x <- training[,!"label"]
+train_y <- training[,label]
+test_x  <- test[,!"label"]
+test_y  <- test[,label]
+
+# check if data is balanced across classes:
+prop.table(table(training$label))
+
+#check scale of the data:
+summary(dt)
+str(dt)
+head(dt)
+
+#they're on different scale, so we need to scale it:
+#scale and get statistics to use on the test set to apply the same scaling
+train_x_scaled <- scale(train_x)
+means <- attr(train_x_scaled, "scaled:center")
+sds <- attr(train_x_scaled, "scaled:scale")
+
+# scale test too:
+test_x_scaled <- scale(test_x, center = means, scale = sds)
+
+# re-add class to sets:
+train_final <- cbind(train_x_scaled, Class = training$label)
+test_final  <- cbind(test_x_scaled,  Class = test$label)
+
+train_final <- as.data.frame(train_final)
+test_final <- as.data.frame(test_final)
+
+# check scale again:
+summary(train_final)
+summary(test_final)
+
+```
+
+
+```{r, echo=FALSE, message = FALSE, warning = FALSE}
+# --- split train / validation (stratificato, dal training set) ---
+set.seed(32)
+val_idx <- createDataPartition(train_y, p = 0.2, list = FALSE)[, 1]
+
+x_tr_sub  <- train_x_scaled[-val_idx, ]
+y_tr_sub  <- train_y[-val_idx]
+x_val_sub <- train_x_scaled[val_idx, ]
+y_val_sub <- train_y[val_idx]
+
+# convert to tensors
+x_train_tensor <- torch_tensor(x_tr_sub, dtype = torch_float())
+y_train_tensor <- torch_tensor(y_tr_sub, dtype = torch_long())
+
+x_val_tensor <- torch_tensor(x_val_sub, dtype = torch_float())
+y_val_tensor <- torch_tensor(y_val_sub, dtype = torch_long())
+
+x_test_tensor <- torch_tensor(test_x_scaled, dtype = torch_float())
+y_test_tensor <- torch_tensor(test_y, dtype = torch_long())
+
+# skeleton:
+model <- nn_sequential(
+    nn_linear(97, 130), nn_relu(),
+    nn_linear(130, 16), nn_relu(),
+    nn_linear(16, 5)
+)
+
+weights <- torch_tensor(c(1, 1, 1, 1, 1))
+criterion <- nn_cross_entropy_loss(weight = weights)
+optimizer <- optim_adam(model$parameters, lr = 0.001)
+
+# early stopping settings (criterio: val accuracy)
+epochs <- 2500          # massimo
+patience <- 300         # epoche senza miglioramento della val accuracy prima di fermarsi
+best_val_acc <- 0
+best_epoch <- 0
+best_state <- NULL
+
+for (i in 1:epochs) {
+    # --- training step ---
+    model$train()
+    optimizer$zero_grad()
+    y_pred_tensor <- model(x_train_tensor)
+    loss <- criterion(y_pred_tensor, y_train_tensor)
+    loss$backward()
+    optimizer$step()
+
+    # --- validation ---
+    model$eval()
+    with_no_grad({
+        val_pred <- model(x_val_tensor)
+        val_loss <- criterion(val_pred, y_val_tensor)$item()
+        val_acc  <- (val_pred$argmax(dim = 2) == y_val_tensor)$sum()$item() / y_val_tensor$size()
+    })
+
+    # salva il modello migliore in base alla val accuracy
+    if (val_acc > best_val_acc) {
+        best_val_acc <- val_acc
+        best_epoch <- i
+        best_state <- lapply(model$state_dict(), function(x) x$clone())
+    }
+
+    if (i %% 10 == 0) {
+        winners <- y_pred_tensor$argmax(dim = 2)
+        train_acc <- (winners == y_train_tensor)$sum()$item() / y_train_tensor$size()
+        cat("Epoch:", i,
+            "| Train loss", round(loss$item(), 4), "acc", round(train_acc, 4),
+            "| Val loss", round(val_loss, 4), "acc", round(val_acc, 4), "\n")
+    }
+
+    # stop se non migliora da 'patience' epoche
+    if (i - best_epoch >= patience) {
+        cat("Early stopping at epoch", i, "- best epoch:", best_epoch,
+            "- best val acc:", round(best_val_acc, 4), "\n")
+        break
+    }
+}
+
+# ripristina i pesi della migliore epoca
+model$load_state_dict(best_state)
+
+# Check on the test set
+model$eval()
+y_pred_tensor <- model(x_test_tensor)
+y_pred <- as.array(y_pred_tensor$argmax(dim = 2))
+
+cat(" Accuracy: ", sum(y_pred == test_y) / length(y_pred), "\n")
+
+confusionMatrix(
+  as.factor(y_pred),
+  as.factor(test_y)
+)
+```
+
+
+```{r}
+library(torch)
+library(caret)  # per createFolds e confusionMatrix
+library(dplyr)
+
+# Parameters
+k <- 10
+epochs <- 2500
+lr <- 0.004
+
+# to save metrics for each fold
+accuracies <- numeric(k)
+
+folds <- createFolds(train_y, k = k, list = TRUE)
+
+for (i in 1:k) {
+  cat("\n--- Fold", i, "---\n")
+  
+  # Indexes
+  test_idx <- folds[[i]]
+  train_idx <- setdiff(seq_len(nrow(train_x)), test_idx)
+  
+  # Split train/test for this fold 
+  x_train_fold <- train_x[train_idx, ]
+  y_train_fold <- train_y[train_idx]
+  
+  x_val_fold <- train_x[test_idx, ]
+  y_val_fold <- train_y[test_idx]
+  
+  # calculate mean and std on training fold
+  means <- colMeans(x_train_fold)
+  sds <- apply(x_train_fold, 2, sd)
+  
+  # Scale train and validation fold using metrics from training set
+  x_train_fold_scaled <- scale(x_train_fold, center = means, scale = sds)
+  x_val_fold_scaled <- scale(x_val_fold, center = means, scale = sds)
+  
+  # Convert into tensors
+  x_train_tensor <- torch_tensor(x_train_fold_scaled, dtype = torch_float())
+  y_train_tensor <- torch_tensor(y_train_fold, dtype = torch_long())
+  
+  x_val_tensor <- torch_tensor(x_val_fold_scaled, dtype = torch_float())
+  y_val_tensor <- torch_tensor(y_val_fold, dtype = torch_long())
+  
+  # Model
+  model <- nn_sequential(
+    nn_linear(97, 130), nn_relu(),
+    nn_linear(130, 16), nn_relu(),
+    nn_linear(16, 5), nn_softmax(dim = 2)
+  )
+  
+  criterion <- nn_cross_entropy_loss()
+  optimizer <- optim_adam(model$parameters, lr = lr)
+  
+  # Training loop
+  for (epoch in 1:epochs) {
+    model$train()
+    optimizer$zero_grad()
+    
+    y_pred <- model(x_train_tensor)
+    loss <- criterion(y_pred, y_train_tensor)
+    
+    loss$backward()
+    optimizer$step()
+    
+    if (epoch %% 500 == 0) {
+      cat("Epoch:", epoch, "Loss:", loss$item(), "\n")
+    }
+  }
+  
+  # Evaluation
+  model$eval()
+  y_pred_val <- model(x_val_tensor)
+  pred_labels <- y_pred_val$argmax(dim = 2)
+  
+  # compute accuracy
+  accuracy <- sum(as_array(pred_labels) == y_val_fold) / length(y_val_fold)
+  accuracies[i] <- accuracy
+  cat("Fold", i, "Accuracy:", accuracy, "\n")
+  
+  # Confusion matrix 
+  true <- factor(y_val_fold, levels = 1:5)
+  pred <- factor(as_array(pred_labels), levels = 1:5)
+  cm <- confusionMatrix(pred, true)
+  print(cm)
+}
+
+# Final Results
+cat("\n--- Risultato Finale ---\n")
+cat("Accuratezza media:", mean(accuracies), "\n")
+cat("Deviazione standard:", sd(accuracies), "\n")
+
+
+```
+
+
+```{r}
+# SVM model with radial kernel:
+svm_model_radial <- svm(Class ~ ., data = train_final, type = "C-classification", kernel = "radial", scale = FALSE)
+
+#compute training accuracy for model with radial kernel 
+pred_train_radial <- predict(svm_model_radial, train_final)
+mean(pred_train_radial == train_final$Class) #[1]0.8367583
+
+# SVM model with linear kernel:
+svm_model_linear <- svm(Class ~ ., data = train_final, type = "C-classification", kernel = "linear", scale = FALSE)
+
+#compute training accuracy for model with linear kernel 
+pred_train_linear <- predict(svm_model_linear, train_final)
+mean(pred_train_linear == train_final$Class) #[1] 0.54187
+
+
+
+# svm on test set:
+pred_test_radial <- predict(svm_model_radial, test_final) 
+mean(pred_test_radial == test_final$Class) #[1] 0.8190231
+
+pred_test_linear <- predict(svm_model_linear, test_final) 
+mean(pred_test_linear == test_final$Class) #[1] 0.80771212
+```
+
+```{r}
+# Make sure train_y is a factor
+train_y <- as.factor(train_y)
+
+# Initialize k:
+k <- seq(1, 12, 2)
+
+# KNN model (training):
+knn <- lapply(k, \(x) knn.cv(train = train_x_scaled, cl = train_y, k = x))
+accuracies <- sapply(knn, function(x) {
+  pred_factor <- factor(x, levels = levels(train_y))
+  confusionMatrix(data = pred_factor, reference = train_y)$overall["Accuracy"]
+})
+
+plot_ly(x = k, y = accuracies, type = "scatter", mode = "lines") #best k is 9 for both dataset
+```
+
+
+```{r}
+# Make sure test_y is a factor
+test_y <- as.factor(test_y)
+
+# KNN on test set:
+test_pred <- knn(train = train_x_scaled,
+                 cl    = train_y,
+                 test  = test_x_scaled,
+                 k     = 7)
+pred_factor <- factor(test_pred, levels = levels(test_y))
+confusionMatrix(data = pred_factor, reference = test_y)
+```
+
+
+```{r}
+library(rpart)
+# in case someone wants to run this model only, make sure those are factors
+train_y <- as.factor(train_y)
+test_y <- as.factor(test_y)
+
+# Random forest model:
+#original training set
+rf.orig <- ranger(x = train_x_scaled, y = train_y) # default parameters
+# Results on training set
+confusionMatrix(data = rf.orig$predictions, reference = train_y,
+                                 positive = "1-closed", mode = "prec_recall")
+# Random Forest on test set:
+# original training set:
+my_pred <- predict(object = rf.orig, data = test_x_scaled)
+confusionMatrix(data = my_pred$predictions, reference = test_y, 
+                positive = "1-closed", mode = "prec_recall")
+```
+
+
+```{r}
+library(data.table)
+
+# XGBoost model:
+xgbtraining <- train_final
+setDT(xgbtraining)
+
+# Escludiamo la colonna Class usando la sintassi data.table corretta
+xgbtraining_x <- as.matrix(xgbtraining[, !"Class"])
+
+# MODIFICA 1: Convertiamo le 5 classi in numeri da 0 a 4
+target_levels <- levels(as.factor(xgbtraining$Class)) # Memorizza l'ordine ufficiale delle classi
+xgbtraining_y <- as.integer(as.factor(xgbtraining$Class)) - 1
+
+# training:
+# MODIFICA 2: Cambiato objective in "multi:softprob" e aggiunto num_class = 5
+xgb <- xgboost(data = xgbtraining_x, label = xgbtraining_y, nrounds = 500, 
+               objective = "multi:softprob", num_class = 5)
+
+# XGBoost Test Set:
+xgbtest <- test_final
+setDT(xgbtest) # Assicuriamoci che sia un data.table come il training
+
+xgbtest_x <- as.matrix(xgbtest[, !"Class"])
+
+# MODIFICA 3: Convertiamo il test set usando gli stessi identici livelli del training
+xgbtest_y <- as.integer(factor(xgbtest$Class, levels = target_levels)) - 1
+
+# xgboost predictions:
+# mypred sarà una matrice con 5 colonne (una probabilità per classe)
+mypred <- predict(xgb, newdata = xgbtest_x)
+mypred_matrix <- matrix(mypred, ncol = 5, byrow = TRUE)
+
+# MODIFICA 4: Prende l'indice della colonna con probabilità massima (da 1..5 a 0..4)
+pred_class <- max.col(mypred_matrix) - 1
+
+# MODIFICA 5: Adattiamo i fattori per la matrice di confusione (livelli da 0 a 4)
+# Rimosso il parametro 'positive = "1"' perché non è più una classificazione binaria
+pred_factor <- factor(pred_class, levels = c(0, 1, 2, 3, 4))
+true_factor <- factor(xgbtest_y, levels = c(0, 1, 2, 3, 4))
+
+# 3. Calcola la matrice di confusione multiclasse
+cm <- confusionMatrix(pred_factor, true_factor, mode = "prec_recall")
+print(cm)
+```
+
+```{r}
+# ---------- NUOVO: FNN con early stopping (funzioni riutilizzabili) ----------
+# Stessa logica del blocco FNN con early stopping:
+# architettura 130-16, logit in uscita (niente softmax), lr 0.001, max 2500 epoche,
+# validation stratificata 20% presa dal training, criterio = val accuracy, patience 300.
+library(torch)
+library(caret)
+
+fnn_es_fit <- function(x_train_scaled, y_train_f, n_classes,
+                       lr = 0.001, epochs = 2500, patience = 300,
+                       val_p = 0.2, seed = 32, log_every = 0, verbose = TRUE) {
+  set.seed(seed)
+  torch_manual_seed(seed)
+
+  # split train / validation (stratificato per classe)
+  val_idx <- createDataPartition(y_train_f, p = val_p, list = FALSE)[, 1]
+
+  x_tr_t  <- torch_tensor(x_train_scaled[-val_idx, , drop = FALSE], dtype = torch_float())
+  y_tr_t  <- torch_tensor(as.integer(y_train_f)[-val_idx], dtype = torch_long())
+  x_val_t <- torch_tensor(x_train_scaled[val_idx, , drop = FALSE], dtype = torch_float())
+  y_val_t <- torch_tensor(as.integer(y_train_f)[val_idx], dtype = torch_long())
+
+  model <- nn_sequential(
+    nn_linear(ncol(x_train_scaled), 130), nn_relu(),
+    nn_linear(130, 16), nn_relu(),
+    nn_linear(16, n_classes)
+  )
+  criterion <- nn_cross_entropy_loss()
+  optimizer <- optim_adam(model$parameters, lr = lr)
+
+  best_val_acc <- 0
+  best_epoch <- 0
+  best_state <- NULL
+  stopped_at <- epochs
+
+  for (i in 1:epochs) {
+    # --- training step ---
+    model$train()
+    optimizer$zero_grad()
+    y_pred_tensor <- model(x_tr_t)
+    loss <- criterion(y_pred_tensor, y_tr_t)
+    loss$backward()
+    optimizer$step()
+
+    # --- validation ---
+    model$eval()
+    with_no_grad({
+      val_pred <- model(x_val_t)
+      val_loss <- criterion(val_pred, y_val_t)$item()
+      val_acc  <- (val_pred$argmax(dim = 2) == y_val_t)$sum()$item() / y_val_t$size()
+    })
+
+    # salva il modello migliore in base alla val accuracy
+    if (val_acc > best_val_acc) {
+      best_val_acc <- val_acc
+      best_epoch <- i
+      best_state <- lapply(model$state_dict(), function(x) x$clone())
+    }
+
+    if (log_every > 0 && i %% log_every == 0) {
+      train_acc <- (y_pred_tensor$argmax(dim = 2) == y_tr_t)$sum()$item() / y_tr_t$size()
+      cat("Epoch:", i,
+          "| Train loss", round(loss$item(), 4), "acc", round(train_acc, 4),
+          "| Val loss", round(val_loss, 4), "acc", round(val_acc, 4), "\n")
+    }
+
+    # stop se non migliora da 'patience' epoche
+    if (i - best_epoch >= patience) {
+      stopped_at <- i
+      break
+    }
+  }
+
+  if (verbose) {
+    cat("Early stopping at epoch", stopped_at, "- best epoch:", best_epoch,
+        "- best val acc:", round(best_val_acc, 4), "\n")
+  }
+
+  # ripristina i pesi della migliore epoca
+  if (!is.null(best_state)) model$load_state_dict(best_state)
+  model$eval()
+
+  list(model = model, best_epoch = best_epoch, stopped_at = stopped_at,
+       best_val_acc = best_val_acc)
+}
+
+fnn_es_predict <- function(model, x_scaled, lv) {
+  model$eval()
+  with_no_grad({
+    out <- model(torch_tensor(x_scaled, dtype = torch_float()))
+  })
+  factor(lv[as_array(out$argmax(dim = 2))], levels = lv)
+}
+```
+
+```{r}
+library(torch)
+library(caret)
+library(dplyr)
+library(e1071)
+library(class)
+library(ranger)
+library(xgboost)
+
+# ---------- Setup ----------
+# dt deve contenere: colonne feature (feat_0, feat_1, ...), "label", "subject_id"
+# Adatta i nomi se necessario
+dt <- as.data.frame(dt)
+feature_cols <- setdiff(colnames(dt), c("label", "subject_id"))
+
+dt$label <- as.factor(dt$label)
+dt$subject_id <- as.factor(dt$subject_id)
+
+subjects <- unique(dt$subject_id)
+
+epochs_nn <- 1800
+lr <- 0.004
+knn_k <- 7
+
+results_loso <- data.frame(
+  subject = character(),
+  model = character(),
+  accuracy = numeric(),
+  training_time_sec = numeric(),
+  n_train_epochs = integer(),
+  n_test_epochs = integer(),
+  stringsAsFactors = FALSE
+)
+
+confusion_matrices_loso <- list()
+
+# ---------- SVM (radial) in parallelo sui soggetti ----------
+# Stesso modello e stessi parametri di prima (C-classification, kernel radiale, scale = FALSE),
+# stesso scaling calcolato sul training di ogni soggetto. Un fit per soggetto, uno per processo.
+# Nota: il tempo registrato e' il tempo del fit nel worker (con piu' processi attivi
+# insieme puo' essere un po' piu' alto di un fit da solo).
+library(parallel)
+
+n_workers <- max(1, min(length(subjects), detectCores() - 1))
+cat("SVM radiale in parallelo su", n_workers, "worker\n")
+
+X_all <- as.matrix(dt[, feature_cols])
+y_all <- dt$label
+subj_all <- as.character(dt$subject_id)
+lv_all <- levels(dt$label)
+
+svm_radial_one <- function(subj) {
+  test_mask <- subj_all == subj
+
+  x_tr <- X_all[!test_mask, , drop = FALSE]
+  x_te <- X_all[test_mask, , drop = FALSE]
+  y_tr <- factor(y_all[!test_mask], levels = lv_all)
+  y_te <- factor(y_all[test_mask], levels = lv_all)
+
+  means <- colMeans(x_tr)
+  sds <- apply(x_tr, 2, sd)
+  sds[sds == 0] <- 1e-8
+
+  x_tr_s <- scale(x_tr, center = means, scale = sds)
+  x_te_s <- scale(x_te, center = means, scale = sds)
+
+  svm_train_df <- data.frame(x_tr_s)
+  svm_train_df$Class <- y_tr
+  svm_val_df <- data.frame(x_te_s)
+
+  t0 <- Sys.time()
+  m <- e1071::svm(Class ~ ., data = svm_train_df, type = "C-classification",
+                  kernel = "radial", scale = FALSE)
+  tt <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
+
+  pred <- factor(predict(m, svm_val_df), levels = lv_all)
+
+  list(subject = subj, pred = pred, truth = y_te, time = tt,
+       n_train = nrow(x_tr), n_test = nrow(x_te))
+}
+
+cl <- makeCluster(n_workers)
+tryCatch({
+  clusterEvalQ(cl, library(e1071))
+  clusterExport(cl, c("X_all", "y_all", "subj_all", "lv_all", "svm_radial_one"))
+  svm_radial_res <- parLapplyLB(cl, as.character(subjects), svm_radial_one)
+}, finally = stopCluster(cl))
+
+for (r in svm_radial_res) {
+  acc_svm_radial <- sum(r$pred == r$truth) / length(r$truth)
+  cm_svm_radial <- tryCatch(confusionMatrix(r$pred, r$truth), error = function(e) NULL)
+
+  results_loso <- rbind(results_loso, data.frame(
+    subject = r$subject, model = "SVM_radial", accuracy = acc_svm_radial,
+    training_time_sec = r$time,
+    n_train_epochs = r$n_train, n_test_epochs = r$n_test
+  ))
+  confusion_matrices_loso[[paste0("SVM_radial_subj", r$subject)]] <- cm_svm_radial
+  cat("SVM (radial) soggetto", r$subject, "Accuracy:", acc_svm_radial,
+      "| Training time:", round(r$time, 2), "s\n")
+}
+
+# ---------- LOSO loop ----------
+for (subj in subjects) {
+
+  cat("\n=========== Left-out subject:", as.character(subj), "===========\n")
+
+  test_mask <- dt$subject_id == subj
+  train_mask <- !test_mask
+
+  x_train_fold <- as.matrix(dt[train_mask, feature_cols])
+  y_train_fold <- dt$label[train_mask]
+
+  x_val_fold <- as.matrix(dt[test_mask, feature_cols])
+  y_val_fold <- dt$label[test_mask]
+
+  cat("Train epochs:", nrow(x_train_fold), "| Test epochs:", nrow(x_val_fold), "\n")
+
+  means <- colMeans(x_train_fold)
+  sds <- apply(x_train_fold, 2, sd)
+  sds[sds == 0] <- 1e-8
+
+  x_train_fold_scaled <- scale(x_train_fold, center = means, scale = sds)
+  x_val_fold_scaled <- scale(x_val_fold, center = means, scale = sds)
+
+  y_train_fold_f <- factor(y_train_fold, levels = levels(dt$label))
+  y_val_fold_f <- factor(y_val_fold, levels = levels(dt$label))
+  n_classes <- length(levels(dt$label))
+  n_features <- ncol(x_train_fold_scaled)
+
+  # ---------- FNN (early stopping su val accuracy, come nel blocco FNN) ----------
+  cat("\n--- FNN ---\n")
+  t0 <- Sys.time()
+
+  fnn_fit <- fnn_es_fit(x_train_fold_scaled, y_train_fold_f, n_classes)
+
+  training_time_fnn <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
+
+  pred_fnn <- fnn_es_predict(fnn_fit$model, x_val_fold_scaled, levels(dt$label))
+
+  acc_fnn <- sum(pred_fnn == y_val_fold_f) / length(y_val_fold_f)
+  cm_fnn <- tryCatch(confusionMatrix(pred_fnn, y_val_fold_f), error = function(e) NULL)
+
+  results_loso <- rbind(results_loso, data.frame(
+    subject = as.character(subj), model = "FNN", accuracy = acc_fnn,
+    training_time_sec = training_time_fnn,
+    n_train_epochs = nrow(x_train_fold), n_test_epochs = nrow(x_val_fold)
+  ))
+  confusion_matrices_loso[[paste0("FNN_subj", subj)]] <- cm_fnn
+  cat("FNN Accuracy:", acc_fnn, "| Training time:", round(training_time_fnn, 2), "s\n")
+
+  # ---------- XGBoost ----------
+  cat("\n--- XGBoost ---\n")
+  t0 <- Sys.time()
+
+  xgb_train_y <- as.integer(y_train_fold_f) - 1
+
+  xgb_model <- xgboost(data = x_train_fold_scaled, label = xgb_train_y, nrounds = 500,
+                        objective = "multi:softprob", num_class = n_classes, verbose = 0)
+
+  training_time_xgb <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
+
+  xgb_pred_raw <- predict(xgb_model, newdata = x_val_fold_scaled)
+  xgb_pred_matrix <- matrix(xgb_pred_raw, ncol = n_classes, byrow = TRUE)
+  pred_xgb <- factor(levels(dt$label)[max.col(xgb_pred_matrix)], levels = levels(dt$label))
+
+  acc_xgb <- sum(pred_xgb == y_val_fold_f) / length(y_val_fold_f)
+  cm_xgb <- tryCatch(confusionMatrix(pred_xgb, y_val_fold_f), error = function(e) NULL)
+
+  results_loso <- rbind(results_loso, data.frame(
+    subject = as.character(subj), model = "XGBoost", accuracy = acc_xgb,
+    training_time_sec = training_time_xgb,
+    n_train_epochs = nrow(x_train_fold), n_test_epochs = nrow(x_val_fold)
+  ))
+  confusion_matrices_loso[[paste0("XGBoost_subj", subj)]] <- cm_xgb
+  cat("XGBoost Accuracy:", acc_xgb, "| Training time:", round(training_time_xgb, 2), "s\n")
+
+  # ---------- Random Forest ----------
+  cat("\n--- Random Forest ---\n")
+  t0 <- Sys.time()
+
+  rf_model <- ranger(x = x_train_fold_scaled, y = y_train_fold_f)
+
+  training_time_rf <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
+
+  rf_pred <- predict(rf_model, data = x_val_fold_scaled)
+  pred_rf <- factor(rf_pred$predictions, levels = levels(dt$label))
+
+  acc_rf <- sum(pred_rf == y_val_fold_f) / length(y_val_fold_f)
+  cm_rf <- tryCatch(confusionMatrix(pred_rf, y_val_fold_f), error = function(e) NULL)
+
+  results_loso <- rbind(results_loso, data.frame(
+    subject = as.character(subj), model = "RandomForest", accuracy = acc_rf,
+    training_time_sec = training_time_rf,
+    n_train_epochs = nrow(x_train_fold), n_test_epochs = nrow(x_val_fold)
+  ))
+  confusion_matrices_loso[[paste0("RandomForest_subj", subj)]] <- cm_rf
+  cat("Random Forest Accuracy:", acc_rf, "| Training time:", round(training_time_rf, 2), "s\n")
+
+  # ---------- KNN ----------
+  cat("\n--- KNN ---\n")
+  t0 <- Sys.time()
+
+  pred_knn_raw <- knn(train = x_train_fold_scaled, test = x_val_fold_scaled,
+                       cl = y_train_fold_f, k = knn_k)
+
+  training_time_knn <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
+
+  pred_knn <- factor(pred_knn_raw, levels = levels(dt$label))
+  acc_knn <- sum(pred_knn == y_val_fold_f) / length(y_val_fold_f)
+  cm_knn <- tryCatch(confusionMatrix(pred_knn, y_val_fold_f), error = function(e) NULL)
+
+  results_loso <- rbind(results_loso, data.frame(
+    subject = as.character(subj), model = "KNN", accuracy = acc_knn,
+    training_time_sec = training_time_knn,
+    n_train_epochs = nrow(x_train_fold), n_test_epochs = nrow(x_val_fold)
+  ))
+  confusion_matrices_loso[[paste0("KNN_subj", subj)]] <- cm_knn
+  cat("KNN Accuracy:", acc_knn, "| Time (predict, lazy learner):", round(training_time_knn, 2), "s\n")
+
+  # SVM radiale: calcolato in parallelo prima del loop (vedi sopra)
+  # SVM lineare: tolto dalla LOSO
+}
+
+# ---------- Riepilogo finale ----------
+summary_loso <- results_loso %>%
+  group_by(model) %>%
+  summarise(
+    mean_accuracy = mean(accuracy),
+    sd_accuracy = sd(accuracy),
+    mean_training_time_sec = mean(training_time_sec),
+    sd_training_time_sec = sd(training_time_sec)
+  )
+
+print(summary_loso)
+```
+
+```{r}
+library(parallel)
+library(e1071)
+library(caret)
+
+n_workers <- max(1, min(length(subjects), detectCores() - 1))
+cat("SVM lineare in parallelo su", n_workers, "worker\n")
+
+X_all <- as.matrix(dt[, feature_cols])
+y_all <- dt$label
+subj_all <- as.character(dt$subject_id)
+lv_all <- levels(dt$label)
+
+svm_linear_one <- function(subj) {
+  test_mask <- subj_all == subj
+  x_tr <- X_all[!test_mask, , drop = FALSE]
+  x_te <- X_all[test_mask, , drop = FALSE]
+  y_tr <- factor(y_all[!test_mask], levels = lv_all)
+  y_te <- factor(y_all[test_mask], levels = lv_all)
+
+  means <- colMeans(x_tr)
+  sds <- apply(x_tr, 2, sd)
+  sds[sds == 0] <- 1e-8
+  x_tr_s <- scale(x_tr, center = means, scale = sds)
+  x_te_s <- scale(x_te, center = means, scale = sds)
+
+  svm_train_df <- data.frame(x_tr_s); svm_train_df$Class <- y_tr
+  svm_val_df <- data.frame(x_te_s)
+
+  t0 <- Sys.time()
+  m <- e1071::svm(Class ~ ., data = svm_train_df, type = "C-classification",
+                  kernel = "linear", scale = FALSE)
+  tt <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
+
+  list(subject = subj, pred = factor(predict(m, svm_val_df), levels = lv_all),
+       truth = y_te, time = tt, n_train = nrow(x_tr), n_test = nrow(x_te))
+}
+
+cl <- makeCluster(n_workers)
+tryCatch({
+  clusterEvalQ(cl, library(e1071))
+  clusterExport(cl, c("X_all", "y_all", "subj_all", "lv_all", "svm_linear_one"))
+  svm_linear_res <- parLapplyLB(cl, as.character(subjects), svm_linear_one)
+}, finally = stopCluster(cl))
+
+for (r in svm_linear_res) {
+  acc <- sum(r$pred == r$truth) / length(r$truth)
+  results_loso <- rbind(results_loso, data.frame(
+    subject = r$subject, model = "SVM_linear", accuracy = acc,
+    training_time_sec = r$time, n_train_epochs = r$n_train, n_test_epochs = r$n_test))
+  confusion_matrices_loso[[paste0("SVM_linear_subj", r$subject)]] <-
+    tryCatch(confusionMatrix(r$pred, r$truth), error = function(e) NULL)
+  cat("SVM_linear soggetto", r$subject, "Accuracy:", acc, "| Training time:", round(r$time, 2), "s\n")
+}
+
+saveRDS(list(results_loso = results_loso, cms = confusion_matrices_loso), "loso_results.rds")
+```
+
+```{r}
+# ---------- NUOVO: helper comuni a pooled 10-fold e within-subject 10-fold ----------
+# Stessi modelli e stessi iperparametri del blocco LOSO:
+# FNN (early stopping), XGBoost (500 round), RF (default), KNN (k = 7),
+# SVM radiale e lineare (scale = FALSE). Lo scaling e' ricalcolato sul training di ogni fold.
+library(torch)
+library(caret)
+library(dplyr)
+library(e1071)
+library(class)
+library(ranger)
+library(xgboost)
+
+# dati (stessa preparazione del blocco LOSO)
+dt_cv <- as.data.frame(dt)
+feature_cols_cv <- setdiff(colnames(dt_cv), c("label", "subject_id"))
+dt_cv$label <- droplevels(as.factor(dt_cv$label))
+dt_cv$subject_id <- as.character(dt_cv$subject_id)
+
+X_cv <- as.matrix(dt_cv[, feature_cols_cv])
+y_cv <- dt_cv$label
+lv_cv <- levels(y_cv)
+subjects_cv <- unique(dt_cv$subject_id)
+
+K_CV <- 10
+
+# fit + predizioni di tutti i modelli su un fold
+run_all_models <- function(x_tr, y_tr, x_te, lv, seed = 32, with_svm = TRUE) {
+  n_classes <- length(lv)
+  y_tr <- factor(y_tr, levels = lv)
+
+  means <- colMeans(x_tr)
+  sds <- apply(x_tr, 2, sd)
+  sds[is.na(sds) | sds == 0] <- 1e-8
+  x_tr_s <- scale(x_tr, center = means, scale = sds)
+  x_te_s <- scale(x_te, center = means, scale = sds)
+
+  na_pred <- factor(rep(NA_character_, nrow(x_te)), levels = lv)
+  safe <- function(expr, name) {
+    tryCatch(expr, error = function(e) {
+      message("  [", name, "] errore: ", conditionMessage(e))
+      NULL
+    })
+  }
+
+  preds <- list()
+  times <- c()
+  fnn_best_epoch <- NA_real_
+
+  # FNN
+  t0 <- Sys.time()
+  fit <- safe(fnn_es_fit(x_tr_s, y_tr, n_classes, seed = seed, verbose = FALSE), "FNN")
+  times["FNN"] <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
+  if (is.null(fit)) {
+    preds[["FNN"]] <- na_pred
+  } else {
+    fnn_best_epoch <- fit$best_epoch
+    preds[["FNN"]] <- fnn_es_predict(fit$model, x_te_s, lv)
+  }
+
+  # XGBoost
+  t0 <- Sys.time()
+  m <- safe(xgboost(data = x_tr_s, label = as.integer(y_tr) - 1, nrounds = 500,
+                    objective = "multi:softprob", num_class = n_classes, verbose = 0), "XGBoost")
+  times["XGBoost"] <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
+  if (is.null(m)) {
+    preds[["XGBoost"]] <- na_pred
+  } else {
+    pm <- matrix(predict(m, newdata = x_te_s), ncol = n_classes, byrow = TRUE)
+    preds[["XGBoost"]] <- factor(lv[max.col(pm)], levels = lv)
+  }
+
+  # Random Forest
+  t0 <- Sys.time()
+  m <- safe(ranger(x = x_tr_s, y = y_tr), "RandomForest")
+  times["RandomForest"] <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
+  preds[["RandomForest"]] <- if (is.null(m)) na_pred else
+    factor(predict(m, data = x_te_s)$predictions, levels = lv)
+
+  # KNN (tempo = predizione, e' un lazy learner)
+  t0 <- Sys.time()
+  p <- safe(class::knn(train = x_tr_s, test = x_te_s, cl = y_tr, k = 7), "KNN")
+  times["KNN"] <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
+  preds[["KNN"]] <- if (is.null(p)) na_pred else factor(p, levels = lv)
+
+  # SVM: con with_svm = FALSE vengono saltati qui e calcolati in parallelo da run_svm_parallel()
+  if (with_svm) {
+    # SVM radiale
+    t0 <- Sys.time()
+    m <- safe(svm(x = x_tr_s, y = y_tr, type = "C-classification", kernel = "radial", scale = FALSE), "SVM_radial")
+    times["SVM_radial"] <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
+    preds[["SVM_radial"]] <- if (is.null(m)) na_pred else factor(predict(m, x_te_s), levels = lv)
+
+    # SVM lineare
+    t0 <- Sys.time()
+    m <- safe(svm(x = x_tr_s, y = y_tr, type = "C-classification", kernel = "linear", scale = FALSE), "SVM_linear")
+    times["SVM_linear"] <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
+    preds[["SVM_linear"]] <- if (is.null(m)) na_pred else factor(predict(m, x_te_s), levels = lv)
+  }
+
+  list(pred = preds, time = times, fnn_best_epoch = fnn_best_epoch)
+}
+
+# risultati di un fold -> data.frame (una riga per modello)
+make_rows <- function(res, y_te, cv, subject, fold, n_tr) {
+  mods <- names(res$pred)
+  data.frame(
+    cv = cv, subject = subject, fold = fold, model = mods,
+    accuracy = vapply(res$pred, function(p) mean(p == y_te), numeric(1)),
+    training_time_sec = unname(res$time[mods]),
+    n_train = n_tr, n_test = length(y_te),
+    fnn_best_epoch = ifelse(mods == "FNN", res$fnn_best_epoch, NA_real_),
+    stringsAsFactors = FALSE, row.names = NULL
+  )
+}
+
+# predizioni di un fold -> data.frame lungo (per le matrici di confusione)
+make_preds <- function(res, y_te, cv, subject, fold) {
+  do.call(rbind, lapply(names(res$pred), function(m) {
+    data.frame(cv = cv, subject = subject, fold = fold, model = m,
+               truth = y_te, pred = res$pred[[m]], stringsAsFactors = FALSE)
+  }))
+}
+
+# ---------- SVM (radiale + lineare) in parallelo sui fold ----------
+# Stesso modello e stessi parametri di run_all_models (C-classification, scale = FALSE),
+# scaling sul training del fold. Un task = un fold, che fa sia radiale che lineare.
+# Nota: i tempi registrati sono quelli dei fit nel worker (con piu' processi attivi
+# insieme possono essere un po' piu' alti di un fit da solo).
+library(parallel)
+
+svm_fold_task <- function(task) {
+  x_tr <- X_cv[task$tr, , drop = FALSE]
+  x_te <- X_cv[task$te, , drop = FALSE]
+  y_tr <- factor(y_cv[task$tr], levels = lv_cv)
+
+  means <- colMeans(x_tr)
+  sds <- apply(x_tr, 2, sd)
+  sds[is.na(sds) | sds == 0] <- 1e-8
+  x_tr_s <- scale(x_tr, center = means, scale = sds)
+  x_te_s <- scale(x_te, center = means, scale = sds)
+
+  na_pred <- factor(rep(NA_character_, nrow(x_te)), levels = lv_cv)
+  preds <- list()
+  times <- c()
+  for (kern in c("radial", "linear")) {
+    nm <- paste0("SVM_", kern)
+    t0 <- Sys.time()
+    m <- tryCatch(
+      e1071::svm(x = x_tr_s, y = y_tr, type = "C-classification", kernel = kern, scale = FALSE),
+      error = function(e) NULL)
+    times[nm] <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
+    preds[[nm]] <- if (is.null(m)) na_pred else factor(predict(m, x_te_s), levels = lv_cv)
+  }
+
+  list(cv = task$cv, subject = task$subject, fold = task$fold, te = task$te,
+       n_tr = length(task$tr),
+       res = list(pred = preds, time = times, fnn_best_epoch = NA_real_))
+}
+
+run_svm_parallel <- function(tasks, n_workers = max(1, min(length(tasks), detectCores() - 1))) {
+  cat("SVM (radiale + lineare) in parallelo:", length(tasks), "fold su", n_workers, "worker\n")
+  cl <- makeCluster(n_workers)
+  on.exit(stopCluster(cl), add = TRUE)
+  clusterEvalQ(cl, library(e1071))
+  clusterExport(cl, c("X_cv", "y_cv", "lv_cv", "svm_fold_task"))
+  parLapplyLB(cl, tasks, svm_fold_task)
+}
+```
+
+```{r}
+# ---------- NUOVO: POOLED 10-FOLD CV (tutti i soggetti insieme, fold stratificati per classe) ----------
+set.seed(123)
+folds_pooled <- createFolds(y_cv, k = K_CV, list = TRUE)
+
+pooled_rows <- list()
+pooled_preds <- list()
+
+# SVM (radiale + lineare) in parallelo sui 10 fold, prima del loop
+svm_tasks_pooled <- lapply(seq_along(folds_pooled), function(f) {
+  te <- folds_pooled[[f]]
+  list(cv = "Pooled 10-fold", subject = NA_character_, fold = f,
+       te = te, tr = setdiff(seq_len(nrow(X_cv)), te))
+})
+svm_res_pooled <- run_svm_parallel(svm_tasks_pooled)
+for (o in svm_res_pooled) {
+  key <- paste0("svm_", o$fold)
+  pooled_rows[[key]] <- make_rows(o$res, y_cv[o$te], o$cv, o$subject, o$fold, o$n_tr)
+  pooled_preds[[key]] <- make_preds(o$res, y_cv[o$te], o$cv, o$subject, o$fold)
+  cat("Fold", o$fold, "|", paste(sprintf("%s %.4f", names(o$res$pred),
+      vapply(o$res$pred, function(p) mean(p == y_cv[o$te]), numeric(1))), collapse = " | "), "\n")
+}
+
+for (f in seq_along(folds_pooled)) {
+  cat("\n=========== Pooled 10-fold | fold", f, "di", K_CV, "===========\n")
+
+  te <- folds_pooled[[f]]
+  tr <- setdiff(seq_len(nrow(X_cv)), te)
+
+  res <- run_all_models(X_cv[tr, , drop = FALSE], y_cv[tr], X_cv[te, , drop = FALSE],
+                        lv_cv, seed = 32 + f, with_svm = FALSE)
+
+  rows <- make_rows(res, y_cv[te], "Pooled 10-fold", NA_character_, f, length(tr))
+  pooled_rows[[paste0("fold_", f)]] <- rows
+  pooled_preds[[paste0("fold_", f)]] <- make_preds(res, y_cv[te], "Pooled 10-fold", NA_character_, f)
+
+  cat(paste(sprintf("%s %.4f", rows$model, rows$accuracy), collapse = " | "), "\n")
+  cat("FNN best epoch:", res$fnn_best_epoch, "\n")
+
+  saveRDS(list(rows = bind_rows(pooled_rows), preds = bind_rows(pooled_preds)),
+          "pooled_cv_results.rds")
+}
+
+pooled_res <- bind_rows(pooled_rows)
+pooled_pred_df <- bind_rows(pooled_preds)
+
+pooled_res %>%
+  group_by(model) %>%
+  summarise(mean_accuracy = mean(accuracy, na.rm = TRUE),
+            sd_accuracy = sd(accuracy, na.rm = TRUE),
+            mean_training_time_sec = mean(training_time_sec, na.rm = TRUE)) %>%
+  print()
+```
+
+```{r}
+# ---------- NUOVO: WITHIN-SUBJECT 10-FOLD CV (un 10-fold per ogni soggetto, tutti i soggetti) ----------
+# Per ogni soggetto: 10 fold stratificati sulle sue epoch, train e test sempre dello stesso soggetto.
+within_rows <- list()
+within_preds <- list()
+
+# fold di ogni soggetto (stessi seed di prima), come indici globali delle righe
+folds_within <- list()
+for (s in seq_along(subjects_cv)) {
+  subj <- subjects_cv[s]
+  idx_s <- which(dt_cv$subject_id == subj)
+  set.seed(1000 + s)
+  folds_s <- suppressWarnings(createFolds(y_cv[idx_s], k = K_CV, list = TRUE))
+  folds_within[[subj]] <- lapply(folds_s, function(i) idx_s[i])
+}
+
+# SVM (radiale + lineare) in parallelo su tutti i (soggetto, fold), prima del loop
+svm_tasks_within <- list()
+for (subj in subjects_cv) {
+  idx_s <- which(dt_cv$subject_id == subj)
+  for (f in seq_along(folds_within[[subj]])) {
+    te <- folds_within[[subj]][[f]]
+    if (length(te) == 0) next
+    svm_tasks_within[[length(svm_tasks_within) + 1]] <- list(
+      cv = "Within-subject 10-fold", subject = subj, fold = f,
+      te = te, tr = setdiff(idx_s, te))
+  }
+}
+svm_res_within <- run_svm_parallel(svm_tasks_within)
+for (o in svm_res_within) {
+  key <- paste(o$subject, o$fold, "svm", sep = "_")
+  within_rows[[key]] <- make_rows(o$res, y_cv[o$te], o$cv, o$subject, o$fold, o$n_tr)
+  within_preds[[key]] <- make_preds(o$res, y_cv[o$te], o$cv, o$subject, o$fold)
+}
+
+for (s in seq_along(subjects_cv)) {
+  subj <- subjects_cv[s]
+  cat("\n=========== Within-subject | soggetto", subj, "(", s, "di", length(subjects_cv), ") ===========\n")
+
+  idx_s <- which(dt_cv$subject_id == subj)
+
+  for (f in seq_along(folds_within[[subj]])) {
+    te <- folds_within[[subj]][[f]]
+    if (length(te) == 0) next
+
+    tr <- setdiff(idx_s, te)
+
+    res <- run_all_models(X_cv[tr, , drop = FALSE], y_cv[tr], X_cv[te, , drop = FALSE],
+                          lv_cv, seed = 32 + f, with_svm = FALSE)
+
+    key <- paste(subj, f, sep = "_")
+    within_rows[[key]] <- make_rows(res, y_cv[te], "Within-subject 10-fold", subj, f, length(tr))
+    within_preds[[key]] <- make_preds(res, y_cv[te], "Within-subject 10-fold", subj, f)
+  }
+
+  tmp <- bind_rows(within_rows) %>% filter(subject == subj) %>%
+    group_by(model) %>% summarise(acc = mean(accuracy, na.rm = TRUE), .groups = "drop")
+  cat(paste(sprintf("%s %.4f", tmp$model, tmp$acc), collapse = " | "), "\n")
+
+  # salvataggio dopo ogni soggetto, cosi' se si interrompe non si perde tutto
+  saveRDS(list(rows = bind_rows(within_rows), preds = bind_rows(within_preds)),
+          "within_subject_cv_results.rds")
+}
+
+within_res <- bind_rows(within_rows)
+within_pred_df <- bind_rows(within_preds)
+
+within_res %>%
+  group_by(model) %>%
+  summarise(mean_accuracy = mean(accuracy, na.rm = TRUE),
+            sd_accuracy = sd(accuracy, na.rm = TRUE),
+            mean_training_time_sec = mean(training_time_sec, na.rm = TRUE)) %>%
+  print()
+```
+
+```{r}
+library(dplyr)
+library(caret)
+
+# soggetti da escludere dai calcoli (es. c("71")); lascia c() vuoto per tenerli tutti
+exclude_subjects <- c()
+
+model_levels <- c("FNN", "XGBoost", "RandomForest", "KNN", "SVM_radial", "SVM_linear")
+
+# kappa e F1 macro (media sulle classi presenti) da predizioni e verita'
+metrics_from_pred <- function(pred, truth, lv = lv_cv) {
+  ok <- !is.na(pred)
+  if (!any(ok)) return(data.frame(kappa = NA_real_, macro_f1 = NA_real_))
+  cm <- confusionMatrix(factor(pred[ok],  levels = lv),
+                        factor(truth[ok], levels = lv))
+  data.frame(kappa = unname(cm$overall["Kappa"]),
+             macro_f1 = mean(cm$byClass[, "F1"], na.rm = TRUE))
+}
+
+# --- LOSO: una riga per (modello, soggetto), dalle confusion matrix salvate ---
+loso_m <- bind_rows(lapply(names(confusion_matrices_loso), function(nm) {
+  cm <- confusion_matrices_loso[[nm]]
+  data.frame(model = sub("_subj.*$", "", nm),
+             unit  = sub("^.*_subj", "", nm),
+             kappa = if (is.null(cm)) NA_real_ else unname(cm$overall["Kappa"]),
+             macro_f1 = if (is.null(cm)) NA_real_ else mean(cm$byClass[, "F1"], na.rm = TRUE))
+})) %>% filter(!unit %in% exclude_subjects)
+
+# --- Pooled 10-fold: una riga per (modello, fold) ---
+pooled_m <- pooled_pred_df %>%
+  group_by(model, unit = as.character(fold)) %>%
+  group_modify(~ metrics_from_pred(.x$pred, .x$truth)) %>%
+  ungroup()
+
+# --- Within-subject 10-fold: una riga per (modello, soggetto), con le predizioni di tutti i suoi fold ---
+within_m <- within_pred_df %>%
+  filter(!subject %in% exclude_subjects) %>%
+  group_by(model, unit = as.character(subject)) %>%
+  group_modify(~ metrics_from_pred(.x$pred, .x$truth)) %>%
+  ungroup()
+
+# --- tabelle riassuntive ---
+summarise_cv <- function(df) {
+  df %>%
+    mutate(model = factor(model, levels = model_levels)) %>%
+    group_by(model) %>%
+    summarise(n = sum(!is.na(kappa)),
+              kappa_mean = mean(kappa, na.rm = TRUE),
+              kappa_sd = sd(kappa, na.rm = TRUE),
+              kappa_median = median(kappa, na.rm = TRUE),
+              f1_mean = mean(macro_f1, na.rm = TRUE),
+              f1_sd = sd(macro_f1, na.rm = TRUE),
+              f1_median = median(macro_f1, na.rm = TRUE),
+              .groups = "drop") %>%
+    mutate(across(where(is.numeric) & !n, ~ round(.x, 4)))
+}
+
+cat("\n===== Pooled 10-fold (unita' = fold) =====\n");          print(summarise_cv(pooled_m), n = Inf)
+cat("\n===== LOSO (unita' = soggetto) =====\n");                print(summarise_cv(loso_m), n = Inf)
+cat("\n===== Within-subject 10-fold (unita' = soggetto) =====\n"); print(summarise_cv(within_m), n = Inf)
+
+# tutto in un csv
+write.csv(bind_rows(mutate(summarise_cv(pooled_m), cv = "Pooled 10-fold"),
+                    mutate(summarise_cv(loso_m),   cv = "LOSO"),
+                    mutate(summarise_cv(within_m), cv = "Within-subject 10-fold")),
+          "kappa_f1_summary.csv", row.names = FALSE)
+```
+
+```{r, fig.width=12, fig.height=6}
+# ---------- NUOVO: RIEPILOGO E FIGURE (Pooled 10-fold vs LOSO vs Within-subject 10-fold) ----------
+# Richiede: results_loso (blocco LOSO), pooled_res e within_res (blocchi sopra).
+library(ggplot2)
+library(dplyr)
+dir.create("figures", showWarnings = FALSE)
+
+model_levels <- c("FNN", "XGBoost", "RandomForest", "KNN", "SVM_radial", "SVM_linear")
+cv_levels <- c("Pooled 10-fold", "LOSO", "Within-subject 10-fold")
+
+# unita' di analisi: pooled = fold (10 punti), LOSO = soggetto (30 punti),
+# within-subject = media dei 10 fold di ciascun soggetto (30 punti)
+loso_units <- results_loso %>%
+  transmute(cv = "LOSO", subject = as.character(subject), unit = as.character(subject),
+            model, accuracy, training_time_sec)
+
+pooled_units <- pooled_res %>%
+  transmute(cv, subject = NA_character_, unit = paste0("fold", fold),
+            model, accuracy, training_time_sec)
+
+within_units <- within_res %>%
+  group_by(cv, subject, model) %>%
+  summarise(accuracy = mean(accuracy, na.rm = TRUE),
+            training_time_sec = mean(training_time_sec, na.rm = TRUE),
+            .groups = "drop") %>%
+  mutate(unit = subject)
+
+unit_df <- bind_rows(loso_units, pooled_units, within_units) %>%
+  mutate(model = factor(model, levels = model_levels),
+         cv = factor(cv, levels = cv_levels))
+
+summary_all <- unit_df %>%
+  group_by(cv, model) %>%
+  summarise(n_units = n(),
+            mean_accuracy = mean(accuracy, na.rm = TRUE),
+            sd_accuracy = sd(accuracy, na.rm = TRUE),
+            mean_fit_time_sec = mean(training_time_sec, na.rm = TRUE),
+            .groups = "drop")
+
+print(summary_all, n = Inf)
+write.csv(summary_all, "figures/summary_all_cv.csv", row.names = FALSE)
+
+# --- Fig 1: distribuzione dell'accuratezza per modello e tipo di CV ---
+p1 <- ggplot(unit_df, aes(model, accuracy, fill = cv)) +
+  geom_boxplot(position = position_dodge(0.8), width = 0.7, outlier.size = 0.8) +
+  stat_summary(fun = mean, geom = "point", shape = 23, size = 2, fill = "white",
+               position = position_dodge(0.8)) +
+  labs(title = "Accuratezza per modello e tipo di cross-validation",
+       subtitle = "Pooled: 10 fold | LOSO: 30 soggetti | Within-subject: media dei 10 fold per soggetto (rombo = media)",
+       x = NULL, y = "Accuracy", fill = NULL) +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "bottom", axis.text.x = element_text(angle = 30, hjust = 1))
+ggsave("figures/fig1_accuracy_boxplot.png", p1, width = 11, height = 6, dpi = 150)
+print(p1)
+
+# --- Fig 2: media +- sd ---
+p2 <- ggplot(summary_all, aes(model, mean_accuracy, fill = cv)) +
+  geom_col(position = position_dodge(0.8), width = 0.7) +
+  geom_errorbar(aes(ymin = mean_accuracy - sd_accuracy, ymax = mean_accuracy + sd_accuracy),
+                position = position_dodge(0.8), width = 0.25) +
+  coord_cartesian(ylim = c(max(0, floor(min(summary_all$mean_accuracy - summary_all$sd_accuracy, na.rm = TRUE) * 20) / 20), 1)) +
+  labs(title = "Accuratezza media +- sd", x = NULL, y = "Accuracy", fill = NULL) +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "bottom", axis.text.x = element_text(angle = 30, hjust = 1))
+ggsave("figures/fig2_accuracy_mean_sd.png", p2, width = 11, height = 6, dpi = 150)
+print(p2)
+
+# --- Fig 3: tempo medio per singolo fit ---
+p3 <- ggplot(summary_all, aes(model, mean_fit_time_sec, fill = cv)) +
+  geom_col(position = position_dodge(0.8), width = 0.7) +
+  scale_y_log10() +
+  labs(title = "Tempo medio per singolo fit (scala log)",
+       subtitle = "KNN: tempo di predizione (lazy learner)",
+       x = NULL, y = "secondi", fill = NULL) +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "bottom", axis.text.x = element_text(angle = 30, hjust = 1))
+ggsave("figures/fig3_fit_time.png", p3, width = 11, height = 6, dpi = 150)
+print(p3)
+
+# --- Fig 4: LOSO vs within-subject, soggetto per soggetto ---
+sc <- inner_join(
+  loso_units %>% select(subject, model, loso = accuracy),
+  within_units %>% select(subject, model, within = accuracy),
+  by = c("subject", "model")
+) %>% mutate(model = factor(model, levels = model_levels))
+
+p4 <- ggplot(sc, aes(loso, within)) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", colour = "grey40") +
+  geom_point(alpha = 0.7) +
+  facet_wrap(~ model, nrow = 2) +
+  labs(title = "Per ogni soggetto: LOSO vs within-subject",
+       subtitle = "Sopra la diagonale = il modello va meglio quando ha visto dati dello stesso soggetto",
+       x = "Accuracy LOSO", y = "Accuracy within-subject (media 10 fold)") +
+  theme_minimal(base_size = 12)
+ggsave("figures/fig4_loso_vs_within.png", p4, width = 11, height = 6, dpi = 150)
+print(p4)
+```
+
+```{r, fig.width=18, fig.height=7}
+# --- Fig 5: matrici di confusione normalizzate per riga (pooled e within-subject) ---
+cm_df <- bind_rows(pooled_pred_df, within_pred_df) %>%
+  filter(!is.na(pred)) %>%
+  mutate(model = factor(model, levels = model_levels),
+         cv = factor(cv, levels = cv_levels)) %>%
+  count(cv, model, truth, pred) %>%
+  group_by(cv, model, truth) %>%
+  mutate(p = n / sum(n)) %>%
+  ungroup()
+
+p5 <- ggplot(cm_df, aes(pred, truth, fill = p)) +
+  geom_tile(colour = "white") +
+  geom_text(aes(label = round(100 * p)), size = 3) +
+  scale_fill_gradient(low = "white", high = "steelblue", limits = c(0, 1), name = "quota\ndi riga") +
+  scale_y_discrete(limits = rev) +
+  facet_grid(cv ~ model) +
+  labs(title = "Matrici di confusione (% per classe vera)", x = "Predetta", y = "Vera") +
+  theme_minimal(base_size = 11)
+ggsave("figures/fig5_confusion_matrices.png", p5, width = 18, height = 7, dpi = 150)
+print(p5)
+```
