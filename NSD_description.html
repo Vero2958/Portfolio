@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-rbsA2VBKQhggwzxH7pPCaAqO46MgnOM80zW1RWuH61DGLwZJEdK2Kadq2F9CUG65" crossorigin="anonymous">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap" rel="stylesheet">
+    <title>Veronica's Portfolio</title>
+    <style>
+        @font-face {
+          font-family: 'MyCustomFont';
+          src: url("C:/Users/Utente/Downloads/jmh_typewriter/JMH Typewriter.ttf") format('truetype');
+        }
+
+        @font-face {
+          font-family: 'VT323';
+          src: url("C:/Users/Utente/Downloads/Press_Start_2P,VT323/VT323/VT323-Regular.ttf") format('truetype');
+        }
+
+        .great-vibes-regular {
+        font-family: "Great Vibes", cursive;
+        font-weight: 400;
+        font-style: normal;
+        }
+    </style>
+    
+</head>
+<body>
+    <div class="container-fluid mt-9 mb-9 bg-black text-center py-4">
+        <br>
+        <h1 style="font-family: MyCustomFont; color: white;">Voxel-wise encoding model on NSD data</h1>
+        <br>
+    </div>
+    <br>
+    <div class="container mt-4" style="font-family: MyCustomFont;">
+
+        <div class="row">
+            <div class="col mb-4">
+                <div class="card">
+                    <div class="card-header text-center" style="background-color: black;"><h1><strong style="color: rgb(103, 216, 247); font-family: VT323;">Project Description</strong></h1></div>
+                    <div class="card-body">
+                        <br>
+                        <p>
+                            <b style="color: rgb(103, 216, 247); font-size: larger;">This is a visual neuroscience project</b> trying to answer a practical question: can we predict a new subject's brain responses to images accurately when we only have a small 
+                            amount of that subject's <b style="color: rgb(103, 216, 247); font-size: larger;">fMRI data</b>?
+                        </p>
+                        <p>
+                            The project revolves around developing a <b style="color: rgb(103, 216, 247); font-size: larger;">data-efficient</b> transfer-learning approach to predict <b style="color: rgb(103, 216, 247); font-size: larger;">voxel-wise activations</b> of a novel subject from other subjects' pretrained full-data 
+                            models and the target's <b style="color: rgb(103, 216, 247); font-size: larger;">intrinsic rest-derived connectivity</b>.                                
+                        </p>
+                        <p>
+                            After implementing <b style="color: rgb(103, 216, 247); font-size: larger;">Gu et al., 2022</b>, I found out their approach didn't perform as well as the full-data baseline on a voxel-wise task.
+                        </p>
+                        <p>
+                            I performed a systematic <b style="color: rgb(103, 216, 247); font-size: larger;">error analysis</b> to figure out what the problem was. Looks like OLS regressions do not like multicollinear inputs, and our stacking is REALLY multicollinear, so I fixed the approach by adding <b style="color: rgb(103, 216, 247); font-size: larger;">L2 regularization</b>.                                   
+                        </p>
+                        <p>
+                            A personalization limitation noticed by the authors of the original paper gave me the idea of trying to <b style="color: rgb(103, 216, 247); font-size: larger;">personalize</b> the approach by using intrinsic <b style="color: rgb(103, 216, 247); font-size: larger;">functional connectivity</b>.
+                            Why? Well, because it is subject-specific and shaped by the activity through plasticity. Most importantly, it is available in the NSD :)
+                        </p>
+                        <p>
+                            Soooo, I derived <b style="color: rgb(103, 216, 247); font-size: larger;">connectivity fingerprints</b> from resting-state recordings from each subject and analyzed them to ensure that they contain information specific to the subject and correlated in some way with task activity, as the literature on the topic suggests they do.
+                        </p>
+                        <p>
+                            Turns out <b style="color: rgb(103, 216, 247); font-size: larger;">rest-derived and task-derived connectivity seem to be highly correlated</b>, so the first can potentially be used to predict the second. Importantly, there's no correlation between rest-derived connectivity fingerprints of different subjects.
+                        </p>
+                        <p>
+                            This portion of the project is still ongoing, but I got some very interesting neuroscientific insights from some pieces of analysis I performed out of curiosity.
+                            For instance, I've found out that <b style="color: rgb(103, 216, 247); font-size: larger;">voxels have almost no functional correspondence between subjects</b>. Between two subjects' V1v areas, only up to approximately 25% of voxels had a functionally similar twin in the other subject's region, and for later visual areas it was much less as well (less than 10%).
+                        </p>
+                        <p>
+                            I also found out that, while the specific activation patterns during resting state were completely uncorrelated between sessions, <b style="color: rgb(103, 216, 247); font-size: larger;">the connectivity itself was well preserved over time</b>, especially in early visual areas such as V1v. This means that really different patterns of activity can emerge from the same underlying functional connectivity.
+                        </p>
+                        <p>
+                            Currently, I'm focusing on trying to express some of the information represented in the fingerprints in a meaningful way for the model. <b style="color: rgb(103, 216, 247); font-size: larger;">Preliminary results</b> suggest that there's quite some margin of improvement for the connectivity to contribute.
+                            I'm also in the process of drafting a <b style="color: rgb(103, 216, 247); font-size: larger;">pre-print</b> about the regularization fix (please send coffee). The rest will go in my bachelor's thesis.
+                        </p>
+                        <p> <b style="font-size: larger;"></b> </p>
+                    </div>
+                </div>
+                <br>
+                <br>
+                <div class="text-center"><b style="color: rgb(103, 216, 247); font-size: larger;"><a href="index.html" style="color: rgb(103, 216, 247)">Back to Home Page!</a></b></div>
+            </div>
+        </div>
+        <br> 
+    </div>
+<br>
+<footer class="footer bg-black mt-auto mb-auto py-3 text-white text-center" style="font-family: MyCustomFont;">
+    <p class="mt-3">&reg; Veronica's Portfolio</p>
+</footer>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  // I tuoi 13 colori Viridis dal Verde al Viola
+  const plasma = [
+  '#fdca26', // 2. Oro / Ambra
+  '#fb9f3a', // 3. Arancio Plasma
+  '#ed7953', // 4. Salmone Scuro
+  '#d8576b', // 5. Corallo / Magenta
+  '#bd4180', // 6. Fucsia Profondo
+  '#9c179e', // 7. Viola Elettrico
+  '#7b02a8', // 8. Indaco Saturo
+  '#5d01a8', // 9. Ultravioletto
+  '#3e049c', // 10. Blu Notte Elettrico
+  '#220790', // 11. Oltremare Scuro
+  '#0d0887', // 12. Blu Abisso
+];
+  // Seleziona SOLO gli elementi che hanno un attributo "style" che definisce un colore
+  // Funziona sia che siano tag <a>, <b>, <span> o titoli
+  const coloredElements = Array.from(document.querySelectorAll('[style*="color"]'));
+  
+  // Distribuisce i colori Viridis in modo proporzionale lungo la pagina
+  coloredElements.forEach((el, index) => {
+    const colorIndex = Math.floor((index / coloredElements.length) * plasma.length);
+    el.style.color = plasma[colorIndex];
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-rbsA2VBKQhggwzxH7pPCaAqO46MgnOM80zW1RWuH61DGLwZJEdK2Kadq2F9CUG65" crossorigin="anonymous">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap" rel="stylesheet">
+    <title>Veronica's Portfolio</title>
+    <style>
+        @font-face {
+          font-family: 'MyCustomFont';
+          src: url("C:/Users/Utente/Downloads/jmh_typewriter/JMH Typewriter.ttf") format('truetype');
+        }
+
+        @font-face {
+          font-family: 'VT323';
+          src: url("C:/Users/Utente/Downloads/Press_Start_2P,VT323/VT323/VT323-Regular.ttf") format('truetype');
+        }
+
+        .great-vibes-regular {
+        font-family: "Great Vibes", cursive;
+        font-weight: 400;
+        font-style: normal;
+        }
+    </style>
+    
+</head>
+<body>
+    <div class="container-fluid mt-9 mb-9 bg-black text-center py-4">
+        <br>
+        <h1 style="font-family: MyCustomFont; color: white;">Modeling Projects</h1>
+        <br>
+    </div>
+    <br>
+    <div class="container mt-4" style="font-family: MyCustomFont;">
+        <div class="row">
+            <div class="col mb-4">
+                <div class="card">
+                    <div class="card-header text-center" style="background-color: black;"><h1><strong style="color: rgb(103, 216, 247); font-family: VT323;">Single LIF neuron and LIF network model</strong></h1></div>
+                    <div class="card-body">
+                        <br>
+                        <p>When I entered Vogels lab, I knew absolutely nothing at all about modeling. I couldn't even code a single <b style="color: rgb(103, 216, 247); font-size: larger;">LIF neuron</b>, so obviosuly that's where I started from!</p>
+                        <p>I <b style="color: rgb(103, 216, 247); font-size: larger;">implemented the mathematics of a simple LIF neuron</b>. The model <b style="color: rgb(103, 216, 247); font-size: larger;">simulates membrane potential dynamics</b> using math-based <b style="color: rgb(103, 216, 247); font-size: larger;">RC circuit discretization</b> and features a conditional timer that deterministically manages both <b style="color: rgb(103, 216, 247); font-size: larger;">absolute and relative refractory periods</b> through dynamic threshold scaling. Nothing fancy here, just a working LIF neuron :D</p>
+                        <p>I then <b style="color: rgb(103, 216, 247); font-size: larger;">created 40 of them and randomly connected them</b> to create a dense network. For biological plausiblity purposes, I added <b style="color: rgb(103, 216, 247); font-size: larger;">stochastic noise</b> and <b style="color: rgb(103, 216, 247); font-size: larger;">randomized refractory periods</b> (between 10 and 20 ms, in the single neurons, it was fixed at 15 ms). I also did a <b style="color: rgb(103, 216, 247); font-size: larger;">vectorized version</b> of this network using numpy.</p>
+                        <p> <b style="font-size: larger;">Here's the link to this project's code: <a href="https://github.com/Vero2958/Portfolio/tree/main/Modeling%20Projects/LIF%20neuron%20and%20networks" style="color: rgb(103, 216, 247)";>Project Directory</a></b> </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <br> 
+        <div class="row">
+            <div class="col mb-4">
+                <div class="card">
+                    <div class="card-header text-center" style="background-color: black;"><h1><strong style="color: rgb(103, 216, 247); font-family: VT323;">Ben-Yishai et al., 1995 (Ring Attractor Model)</strong></h1></div>
+                    <div class="card-body">
+                        <br>
+                        <p>Obviously, the first thing Tim did when I arrived in the lab was to give me <b style="color: rgb(103, 216, 247); font-size: larger;">a shit ton of papers to read</b> (well deserved ahaha). Among these papers, there was one that I found particularly elegant and interesting (and that is still one of my favorites to this day), <b style="color: rgb(103, 216, 247); font-size: larger;">Ben-Yishai's 1995 <i>Theory of Orientation Tuning in the Visual Cortex.</i></b></p>
+                        <p>Now, of course I couldn't properly grasp the math on the spot, but I found the results to be so interesting that I decided to spend a whole week <b style="color: rgb(103, 216, 247); font-size: larger;">doing the whole derivation by hand</b> (Yep, that ended up being a good ten pages of calculations).</p>
+                        <p>I showed my work to Tim and he quickly caught on to the fact that I really enjoyed that paper, so he told me to <b style="color: rgb(103, 216, 247); font-size: larger;">implement it in Python</b>, to start doing a bit of serious coding.</p>
+                        <p>Now, Ben-Yishai's 1995 Ring model is a <b style="color: rgb(103, 216, 247); font-size: larger;">mean-field model</b>. Neurons are organized in <b style="color: rgb(103, 216, 247); font-size: larger;">hypercolumns</b>, which are characterized by their <b style="color: rgb(103, 216, 247); font-size: larger;">preferred orientation</b>. The connectivity is also peculiar, each column forms excitatory connections with the columns immediately close to it and with a similar orientation preference, while at the same time creating long-range inhibitory connections (through interneurons) with columns with different orientation selectivities. Such connectivity is called <b style="color: rgb(103, 216, 247); font-size: larger;">mexican hat connectivity</b>, as it looks like a sombrero hat. Tim told me <b style="color: rgb(103, 216, 247); font-size: larger;">this specific connectivity was hiding something</b>, and set me off on a hunt to try and figure out what it was they were hiding.
+                           <b style="color: rgb(103, 216, 247); font-size: larger;">My implementation was working perfectly fine</b>, the behaviour was exactly as described in the paper, so I was really puzzled about what he meant with that. My approach was therefore the following: I stared at the screen, stared at the equations, and then back at the screen, in turn for about as long as I needed to figure out that there was nothing wrong with the implementation, and that maybe that was the whole point, so <b style="color: rgb(103, 216, 247); font-size: larger;">I started to frantically change all the parameters I had available</b> in all possible ways.
+                        </p>
+                        <p>
+                            I asked myself a gazillion questions: "What happens if I make the <b style="color: rgb(103, 216, 247); font-size: larger;"></b>excitation stronger?</p>", "what happens if I <b style="color: rgb(103, 216, 247); font-size: larger;">make it weaker?</b>", "what happens if I <b style="color: rgb(103, 216, 247); font-size: larger;">add noise?</b>", "what happens if I <b style="color: rgb(103, 216, 247); font-size: larger;">load this thing onto a rocket and shoot it into space?</b>" (This last one was probably due to stress ahaha). Eventually, I figured out what Tim was referring to. <b style="color: rgb(103, 216, 247); font-size: larger;">The paper said nothing about time</b>. There were only 2 dimensions considered: Orientation and Activation Frequency, but <b style="color: rgb(103, 216, 247); font-size: larger;">no mention of how the bump evolved over time</b>. Turns out that under the paper's parameters, if you give it an input the activity stays on while the stimulus is present and then just goes back to baseline. 
+                            However, if you <b style="color: rgb(103, 216, 247); font-size: larger;">modify the ratio of excitation and inhibition</b> such that local excitation becomes stronger and global inhibition becomes weaker, <b style="color: rgb(103, 216, 247); font-size: larger;">activity can persist after the stimulus is gone</b> thanks to the <b style="color: rgb(103, 216, 247); font-size: larger;">recurrent excitation</b> generated within the circuit. This, although at first may appear to be a bug (because what do you mean I'm still seeing the stimulus after it is gone?), is actually <b style="color: rgb(103, 216, 247); font-size: larger;">a feature</b> (see what I've done there? ;D), because it is the mechanism that allows for <b style="color: rgb(103, 216, 247); font-size: larger;">working memory</b>.
+                        </p>
+                        <p>
+                            After finally realizing this, and since I had observed very interesting dynamics while I was manipulating the model by adding noise, I decided to look at <b style="color: rgb(103, 216, 247); font-size: larger;">how the persistent activity would react to somewhat realistic noise conditions</b>. I added <b style="color: rgb(103, 216, 247); font-size: larger;">4 types of noise</b>, and the result was surprising: <b style="color: rgb(103, 216, 247); font-size: larger;">after the input was gone</b>, there was nothing there anymore to keep the activity anchored on the correct orientation, so <b style="color: rgb(103, 216, 247); font-size: larger;">it would start drifting</b>, exhibiting what I later realized was basically <b style="color: rgb(103, 216, 247); font-size: larger;">an abstraction of representational drift</b>.
+                        </p>
+                        </p>
+                        <p> <b style="font-size: larger;">Here's the link to this project's code: <a href="https://github.com/Vero2958/Portfolio/tree/main/Modeling%20Projects/Ben-Yishai%2C%201995" style="color: rgb(103, 216, 247)";>Project Directory</a></b> </p>
+                        <!-- CAROSELLO BOOTSTRAP (Non si muove da solo grazie a data-bs-interval="false") -->
+                        <div id="galleria_ben_yishai" class="carousel slide" data-bs-interval="false" style="max-width: 800px; margin: 0 auto; background: #000;">
+                        
+                            <div class="carousel-inner">
+                                <!-- Prima Foto (la classe "active" serve a dire a Bootstrap da dove iniziare) -->
+                                <div class="carousel-item active">
+                                    <img src="Screenshot\Portfolio_ben_yishai\Screenshot 2026-11-08 201458.png" class="d-block w-100" style="height: 450px; object-fit: contain;">
+                                    <div class="text-center text-light px-4 d-flex align-items-center justify-content-center" style="background: #111; height: 90px;">
+                                        <p class="small mb-0"><strong>Fig 1.</strong> Dynamics of the bump under the paper's parameters. The bump moves and changes its position as soon as a new input orientation is presented. Mexican hat is also shown. The inputs and the parameters are listed on the top-left.</p>
+                                    </div>
+                                </div>
+                                
+                                <!-- Seconda Foto -->
+                                <div class="carousel-item">
+                                    <img src="Screenshot\Portfolio_ben_yishai\Screenshot 2026-11-08 193111.png" class="d-block w-100" style="height: 450px; object-fit: contain;">
+                                    <div class="text-center text-light px-4 d-flex align-items-center justify-content-center" style="background: #111; height: 90px;">
+                                        <p class="small mb-0"><strong>Fig 2.</strong> Reproduction of figure 2 of the paper in 3 dimensions instead of 2.</p>
+                                    </div>
+                                </div>
+
+                                <!-- Terza Foto -->
+                                <div class="carousel-item">
+                                    <img src="Screenshot\Portfolio_ben_yishai\Screenshot 2026-11-08 201307.png" class="d-block w-100" style="height: 450px; object-fit: contain;">
+                                    <div class="text-center text-light px-4 d-flex align-items-center justify-content-center" style="background: #111; height: 90px;">
+                                        <p class="small mb-0"><strong>Fig 3.</strong> Bump dynamics under modified mexican hat connectivity. The stimulus is tuned off after 40 seconds, but the bump persists. Mexican hat profile is also shown. Note that this is the configuration that generated that specific activity, but is not the only one able to produce such dynamics.</p>
+                                    </div>
+                                </div>
+
+                                <!-- Quarta Foto -->
+                                <div class="carousel-item">
+                                    <img src="Screenshot\Portfolio_ben_yishai\Screenshot 2026-11-08 201009.png" class="d-block w-100" style="height: 450px; object-fit: contain;">
+                                    <div class="text-center text-light px-4 d-flex align-items-center justify-content-center" style="background: #111; height: 90px;">
+                                        <p class="small mb-0"><strong>Fig 4.</strong> Bump persistance under realistic noise conditions. As can be seen on the right, as soon as the stimulus is turned-off, the bump starts moving. The left side shows some plots showing a summary of the activity's evolution and statistics.</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Freccia Sinistra (Interagisce nativamente con il tuo Bootstrap) -->
+                            <button class="carousel-control-prev" type="button" data-bs-target="#galleria_ben_yishai" data-bs-slide="prev">
+                                <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                            </button>
+                        
+                            <!-- Freccia Destra -->
+                            <button class="carousel-control-next" type="button" data-bs-target="#galleria_ben_yishai" data-bs-slide="next">
+                                <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <br>
+        <div class="row">
+            <div class="col mb-4">
+                <div class="card">
+                    <div class="card-header text-center" style="background-color: black;"><h1><strong style="color: rgb(103, 216, 247); font-family: VT323;">Sussillo et al., 2009 (FORCE Learning)</strong></h1></div>
+                    <div class="card-body">
+                        <br>
+                        <p><b style="color: rgb(103, 216, 247); font-size: larger;"><i>Generating Coherent Patterns of Activity from Chaotic Neural Networks</i></b>, by Sussillo and Abbott, is another very interesting paper I reproduced during the first part of my internship.</p>
+                        <p>
+                            The paper presents <b style="color: rgb(103, 216, 247); font-size: larger;">FORCE learning</b>, but what is that exactly? FORCE stands for <b style="color: rgb(103, 216, 247); font-size: larger;">"first-order reduced and controlled error"</b> and it’s a <b style="color: rgb(103, 216, 247); font-size: larger;">training procedure</b> which uses only <b style="color: rgb(103, 216, 247); font-size: larger;">synaptic modifications</b> to control the feedback signal and <b style="color: rgb(103, 216, 247); font-size: larger;">generate the desired output</b>.
+                            It is based on a <b style="color: rgb(103, 216, 247); font-size: larger;">recursive least-squares (RLS) algorithm</b>, and unlike traditional approaches, which generally perform a sequence of modifications aimed at minimizing initially large errors, in
+                            <b style="color: rgb(103, 216, 247); font-size: larger;">FORCE errors are always small</b>, and the <b style="color: rgb(103, 216, 247); font-size: larger;">goal is reducing the amount of modifications needed</b> to keep them that way.
+                        </p>
+                        <p>
+                            The paper applies FORCE to <b style="color: rgb(103, 216, 247); font-size: larger;">3 different firing-rate networks with different architectures</b>. The first one and the third are a <b style="color: rgb(103, 216, 247); font-size: larger;">simple RNN connected to a readout unit</b> through some weights, the difference between the 2 is that in the case of the <b style="color: rgb(103, 216, 247); font-size: larger;">first network</b>, the <b style="color: rgb(103, 216, 247); font-size: larger;">weights inside the RNN are fixed</b> and can't be updated by FORCE, so the feedback comes from the readout unit itself, meanwhile in the case of <b style="color: rgb(103, 216, 247); font-size: larger;">the third, the weights inside the RNN are modified</b> and therefore the feedback from the readout back to the RNN is not needed anymore.
+                            The <b style="color: rgb(103, 216, 247); font-size: larger;">second one</b> on the other hand handles feedback in a completely different way, through <b style="color: rgb(103, 216, 247); font-size: larger;">a feedback network</b>, which is <b style="color: rgb(103, 216, 247); font-size: larger;">implemented as a second, smaller RNN</b> connected to the first one through some weights from and to it, and only these weights are updated by FORCE. 
+                        </p>
+                        <p> 
+                            I <b style="color: rgb(103, 216, 247); font-size: larger;">implemented all 3 architectures</b> and used FORCE to <b style="color: rgb(103, 216, 247); font-size: larger;">train them to produce a sinusoid</b>. In all 3 cases, the activity was chaotic in the beginning, would quickly start to generate the target function after turning on FORCE, and would keep following it after the learning ended. What I found most interesting about this work is not the learning algorithm itself, but rather the fact that <b style="color: rgb(103, 216, 247); font-size: larger;">networks that were initially chaotic</b> (that is, their scaling parameter g was greater than 1) would <b style="color: rgb(103, 216, 247); font-size: larger;">train faster, reach lower errors, and find more robust weight solutions than silent networks</b>, and the best performance was found in networks at the edge of chaos (g = 1.56).
+                            This seems to suggest that <b style="color: rgb(103, 216, 247); font-size: larger;">chaos could act as a functional substrate that makes the networks more prone to learning</b> and flexible enough to easily adapt to new dynamics, which could be a good argument for justifying the presence of chaotic activity observed in biological neural networks as well.
+                        </p>
+                        <p> <b style="font-size: larger;">Here's the link to this project's code: <a href="https://github.com/Vero2958/Portfolio/tree/main/Modeling%20Projects/FORCE" style="color: rgb(103, 216, 247)";>Project Directory</a></b> </p>
+                        <!-- CAROSELLO BOOTSTRAP -->
+                        <div id="galleria_force" class="carousel slide" data-bs-interval="false" style="max-width: 800px; margin: 0 auto; background: #000;">
+                        
+                            <div class="carousel-inner">
+                                <!-- Prima Foto (la classe "active" serve a dire a Bootstrap da dove iniziare) -->
+                                <div class="carousel-item active">
+                                    <img src="Screenshot\Portfolio_force\Screenshot 2026-11-08 203432.png" class="d-block w-100" style="height: 450px; object-fit: contain;">
+                                    <div class="text-center text-light px-4 d-flex align-items-center justify-content-center" style="background: #111; height: 90px;">
+                                        <p class="small mb-0"><strong>Fig 1.</strong> Activity and readout of my implementation of the first architecture (shown on the left) before, during and after FORCE learning.</p>
+                                    </div>
+                                </div>
+                                
+                                <!-- Seconda Foto -->
+                                <div class="carousel-item">
+                                    <img src="Screenshot\Portfolio_force\Screenshot 2026-11-08 203625.png" class="d-block w-100" style="height: 450px; object-fit: contain;">
+                                    <div class="text-center text-light px-4 d-flex align-items-center justify-content-center" style="background: #111; height: 90px;">
+                                        <p class="small mb-0"><strong>Fig 2.</strong> Readout of my implementation of the second architecture (shown on the left) during and after FORCE learning. Learning starts at 0.</p>
+                                    </div>
+                                </div>
+
+                                <!-- Terza Foto -->
+                                <div class="carousel-item">
+                                    <img src="Screenshot\Portfolio_force\Screenshot 2026-11-08 203806.png" class="d-block w-100" style="height: 450px; object-fit: contain;">
+                                    <div class="text-center text-light px-4 d-flex align-items-center justify-content-center" style="background: #111; height: 90px;">
+                                        <p class="small mb-0"><strong>Fig 3.</strong> Readout of my implementation of the third architecture (shown on the left) during FORCE learning. Learning starts at 0. Unfortunately, I couldn't show persistance of the activity after training because due to the cost of the algorithm I couldn't finish FORCE learning, but we can still see it's working and the readout is following the target.</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Freccia Sinistra (Interagisce nativamente con il tuo Bootstrap) -->
+                            <button class="carousel-control-prev" type="button" data-bs-target="#galleria_force" data-bs-slide="prev">
+                                <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                            </button>
+                        
+                            <!-- Freccia Destra -->
+                            <button class="carousel-control-next" type="button" data-bs-target="#galleria_force" data-bs-slide="next">
+                                <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <br>
+        <div class="row">
+            <div class="col mb-4">
+                <div class="card">
+                    <div class="card-header text-center" style="background-color: black;"><h1><strong style="color: rgb(103, 216, 247); font-family: VT323;">Hennequin et al., 2014 (SOC model)</strong></h1></div>
+                    <div class="card-body">
+                        <br>
+                        <p> Before starting my own project, I worked on <b style="color: rgb(103, 216, 247); font-size: larger;"><i>"Optimal control of transient dynamics in balanced networks supports generation of complex movements"</i></b>, which presents a very interesting model called <b style="color: rgb(103, 216, 247); font-size: larger;">SOC (Stability Optimized Circuit)</b>.</p>
+                        <p> While I won't deny that I didn't really enjoy reading it (If your paper sounds more complex than the work actually is, maybe you should review your wording choices ;D), the insights themselves were really interesting, especially considering that <b style="color: rgb(103, 216, 247); font-size: larger;">balance was emerging autonomously</b> as a consequence of an optimization that wasn't directly constraining the network to be balanced.</p>
+                        <p>
+                            SOCs are <b style="color: rgb(103, 216, 247); font-size: larger;">firing-rate network models</b> that have the peculiarity of being <b style="color: rgb(103, 216, 247); font-size: larger;">derivable from any random connectivity matrix</b> through an <b style="color: rgb(103, 216, 247); font-size: larger;">optimization algorithm</b>. In short, the algorithm (based on <b style="color: rgb(103, 216, 247); font-size: larger;">Lyapunov equations</b>) <b style="color: rgb(103, 216, 247); font-size: larger;">adjusts inhibitory weights</b> through a gradient descent on the smoothed spectral abscissa, before <b style="color: rgb(103, 216, 247); font-size: larger;">enforcing 3 connectivity constraints</b> (Dale's law, sparsity and inhibition on average 3 times stronger than excitation) for biological plausibility. 
+                            The resulting networks are <b style="color: rgb(103, 216, 247); font-size: larger;">balanced and capable of amplifying</b> any input aligned with their amplifying direction through a <b style="color: rgb(103, 216, 247); font-size: larger;">spring-loaded box mechanism</b> characterized by a slow ramp and a fast decay of the activity back to baseline. The ramp "loads" the activity by bringing the network into a state aligned with the preferred input direction that, when released, momentarily breaks E/I balance and originates fast, complex and multiphasic transients.
+                            These dynamics follow the same progression as the <b style="color: rgb(103, 216, 247); font-size: larger;">dynamics observed experimentally in the motor cortex</b>, where a preparation period of activity similar to a steady state precedes a transient generated at movement onset.
+                        </p>
+                        <p>
+                            I <b style="color: rgb(103, 216, 247); font-size: larger;">implemented both the network and the optimization algorithm</b>, and then, to demonstrate that the dynamics that the network was generating were complex enough to potentially generate movements, I <b style="color: rgb(103, 216, 247); font-size: larger;">fitted a linear regression on the activity</b> and "trained it" (although we can't really call it that) to <b style="color: rgb(103, 216, 247); font-size: larger;">decode a few movement trajectories</b> of different shapes from it.
+                        </p>
+                        <p> 
+                            Afterwards, I conducted an <b style="color: rgb(103, 216, 247); font-size: larger;">exploratory analysis</b> on the network, to figure out how the dynamics were emerging, how noise would influence them, and how each parameter affected them. Out of curiosity, I also tried to <b style="color: rgb(103, 216, 247); font-size: larger;">apply the optimization algorithm to the excitatory weights</b> as well.
+                        </p>
+                        <p> Since the abscissa determines whether the network is stable or not, I tried creating <b style="color: rgb(103, 216, 247); font-size: larger;">networks with a range of different abscissa values</b>. Turns out that <b style="color: rgb(103, 216, 247); font-size: larger;">the more stable the network, the faster it returns to baseline</b>, but interestingly these types of networks also <b style="color: rgb(103, 216, 247); font-size: larger;">produce on average stronger transients</b>. Cross 1 and they become unstable, so unstable that the activity will become chaotic and won't return to baseline after the movement onset. The radius of the eigenspectrum also changes the dynamics, not as drastically as the abscissa, but <b style="color: rgb(103, 216, 247); font-size: larger;">a radius bigger than 12 ends up creating a substrate for instability and runaway excitation</b>. 
+                            Also, too much noise and it will completely dilute and eat the dynamics, <b style="color: rgb(103, 216, 247); font-size: larger;">too much non-linearity</b> and the <b style="color: rgb(103, 216, 247); font-size: larger;">dynamics will once again converge to chaos</b>. Lastly, as I said I tried <b style="color: rgb(103, 216, 247); font-size: larger;">optimizing the excitatory weights as well</b>, and it seems like <b style="color: rgb(103, 216, 247); font-size: larger;">the 2 currents start competing with each other</b> as soon as the dynamics depart from baseline (that is, as soon as we try to load the state that will produce the transients), <b style="color: rgb(103, 216, 247); font-size: larger;">inhibition tries to match excitation, and excitation tries to match inhibition</b>, therefore they end up following each other and the activity becomes loosely balanced but unstable.
+                        </p>
+                        <p> <b style="font-size: larger;">Here's the link to this project's code: <a href="https://github.com/Vero2958/Portfolio/tree/main/Modeling%20Projects/SOC" style="color: rgb(103, 216, 247)";>Project Directory</a></b> </p>
+                        <div id="galleria_SOC" class="carousel slide" data-bs-interval="false" style="max-width: 800px; margin: 0 auto; background: #000;">
+                        
+                            <div class="carousel-inner">
+                                <!-- Prima Foto (la classe "active" serve a dire a Bootstrap da dove iniziare) -->
+                                <div class="carousel-item active">
+                                    <img src="Screenshot\Portfolio_SOC\Screenshot 2026-11-09 002130.png" class="d-block w-100" style="height: 450px; object-fit: contain;">
+                                    <div class="text-center text-light px-4 d-flex align-items-center justify-content-center" style="background: #111; height: 90px;">
+                                        <p class="small mb-0"><strong>Fig 1.</strong> An unoptimized network's activity together with its eigenspectrum, E/I currents and connectivity matrix. The activity is chaotic and the network doesn't react to inputs at all.</p>
+                                    </div>
+                                </div>
+                                
+                                <!-- Seconda Foto -->
+                                <div class="carousel-item">
+                                    <img src="Screenshot\Portfolio_SOC\Screenshot 2026-11-09 002723.png" class="d-block w-100" style="height: 450px; object-fit: contain;">
+                                    <div class="text-center text-light px-4 d-flex align-items-center justify-content-center" style="background: #111; height: 90px;">
+                                        <p class="small mb-0"><strong>Fig 2.</strong> A SOC network's activity together with its eigenspectrum, E/I currents and connectivity matrix. We can see the activity is now stable and balanced, and amplification happens.</p>
+                                    </div>
+                                </div>
+
+                                <!-- Terza Foto -->
+                                <div class="carousel-item">
+                                    <img src="Screenshot\Portfolio_SOC\Screenshot 2026-11-09 011437.png" class="d-block w-100" style="height: 450px; object-fit: contain;">
+                                    <div class="text-center text-light px-4 d-flex align-items-center justify-content-center" style="background: #111; height: 90px;">
+                                        <p class="small mb-0"><strong>Fig 3.</strong> Activity of two SOCs with modified eigenspectrum'radius dimension. Original network's R is 10, here the top one has R = 15 and the bottom one has R = 20.</p>
+                                    </div>
+                                </div>
+
+                                <!-- Quarta Foto -->
+                                <div class="carousel-item">
+                                    <img src="Screenshot\Portfolio_SOC\Screenshot 2026-11-09 011519.png" class="d-block w-100" style="height: 450px; object-fit: contain;">
+                                    <div class="text-center text-light px-4 d-flex align-items-center justify-content-center" style="background: #111; height: 90px;">
+                                        <p class="small mb-0"><strong>Fig 4.</strong> Activity of two SOCs with modified target alpha (spectal abscissa). Original network's alpha is 0.5, here the top one has alpha = 0 and the bottom one has alpha = 0.9.</p>
+                                    </div>
+                                </div>
+
+                                <!-- Quinta Foto -->
+                                <div class="carousel-item">
+                                    <img src="Screenshot\Portfolio_SOC\Screenshot 2026-11-09 013722.png" class="d-block w-100" style="height: 450px; object-fit: contain;">
+                                    <div class="text-center text-light px-4 d-flex align-items-center justify-content-center" style="background: #111; height: 90px;">
+                                        <p class="small mb-0"><strong>Fig 5.</strong> Activity of two SOCs with modified non-linearity. Original network's non-linearity is tanh, here the two non-linearities have a much bigger slope. </p>
+                                    </div>
+                                </div>
+
+                                <!-- Sesta Foto -->
+                                <div class="carousel-item">
+                                    <img src="Screenshot\Portfolio_SOC\Screenshot 2026-11-09 014433.png" class="d-block w-100" style="height: 450px; object-fit: contain;">
+                                    <div class="text-center text-light px-4 d-flex align-items-center justify-content-center" style="background: #111; height: 90px;">
+                                        <p class="small mb-0"><strong>Fig 6.</strong> Activity, eigenspectrum, E/I currents and connectivity matrix of a network where both inhibitiory and excitatory connections have been optimized. As soon as the activity departs from baseline, it starts to progressively grow. The network doesn't amplify and never goes back to baseline, although the plot shows that the activity is on average loosely balanced.</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Freccia Sinistra (Interagisce nativamente con il tuo Bootstrap) -->
+                            <button class="carousel-control-prev" type="button" data-bs-target="#galleria_SOC" data-bs-slide="prev">
+                                <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                            </button>
+                        
+                            <!-- Freccia Destra -->
+                            <button class="carousel-control-next" type="button" data-bs-target="#galleria_SOC" data-bs-slide="next">
+                                <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <br>
+                <br>
+                <div class="text-center"><b style="color: rgb(103, 216, 247); font-size: larger;"><a href="index.html" style="color: rgb(103, 216, 247)">Back to Home Page!</a></b></div>
+            </div>
+        </div>
+    </div>
+<br>
+<footer class="footer bg-black mt-auto mb-auto py-3 text-white text-center" style="font-family: MyCustomFont;">
+    <p class="mt-3">&reg; Veronica's Portfolio</p>
+</footer>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  // I tuoi 13 colori Viridis dal Verde al Viola
+  const viridis = [
+  '#fdca26', // 2. Oro / Ambra
+  '#fb9f3a', // 3. Arancio Plasma
+  '#ed7953', // 4. Salmone Scuro
+  '#d8576b', // 5. Corallo / Magenta
+  '#bd4180', // 6. Fucsia Profondo
+  '#9c179e', // 7. Viola Elettrico
+  '#7b02a8', // 8. Indaco Saturo
+  '#5d01a8', // 9. Ultravioletto
+  '#3e049c', // 10. Blu Notte Elettrico
+  '#220790', // 11. Oltremare Scuro
+  '#0d0887', // 12. Blu Abisso
+];
+  
+  // Seleziona SOLO gli elementi che hanno un attributo "style" che definisce un colore
+  // Funziona sia che siano tag <a>, <b>, <span> o titoli
+  const coloredElements = Array.from(document.querySelectorAll('[style*="color"]'));
+  
+  // Distribuisce i colori Viridis in modo proporzionale lungo la pagina
+  coloredElements.forEach((el, index) => {
+    const colorIndex = Math.floor((index / coloredElements.length) * viridis.length);
+    el.style.color = viridis[colorIndex];
+  });
+</script>
+</body>
+</html>

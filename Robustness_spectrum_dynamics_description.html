@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-rbsA2VBKQhggwzxH7pPCaAqO46MgnOM80zW1RWuH61DGLwZJEdK2Kadq2F9CUG65" crossorigin="anonymous">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap" rel="stylesheet">
+    <title>Veronica's Portfolio</title>
+    <style>
+        @font-face {
+          font-family: 'MyCustomFont';
+          src: url("C:/Users/Utente/Downloads/jmh_typewriter/JMH Typewriter.ttf") format('truetype');
+        }
+
+        @font-face {
+          font-family: 'VT323';
+          src: url("C:/Users/Utente/Downloads/Press_Start_2P,VT323/VT323/VT323-Regular.ttf") format('truetype');
+        }
+
+        .great-vibes-regular {
+        font-family: "Great Vibes", cursive;
+        font-weight: 400;
+        font-style: normal;
+        }
+    </style>
+    
+</head>
+<body>
+    <div class="container-fluid mt-9 mb-9 bg-black text-center py-4">
+        <br>
+        <h1 style="font-family: MyCustomFont; color: white;">Robustness of Spectral and Dynamical properties of stable cortical network models with rich dynamics</h1>
+        <br>
+    </div>
+    <br>
+    <div class="container mt-4" style="font-family: MyCustomFont;">
+
+        <div class="row">
+            <div class="col mb-4">
+                <div class="card">
+                    <div class="card-header text-center" style="background-color: black;"><h1><strong style="color: rgb(103, 216, 247); font-family: VT323;">Project Description</strong></h1></div>
+                    <div class="card-body">
+                        <br>
+                        <p>
+                            A very smart colleague of mine, <b style="color: rgb(103, 216, 247); font-size: larger;">Nico Condruz</b> (check out her <b style="color: rgb(103, 216, 247); font-size: larger;">preprint at this <a href="https://www.biorxiv.org/content/10.64898/2026.09.14.751508v1" style="color: rgb(103, 216, 247)">link</a></b>) developed a really cool model: using a <b style="color: rgb(103, 216, 247); font-size: larger;">reverse engineering approach</b> based on <b style="color: rgb(103, 216, 247); font-size: larger;">Schur decomposition</b>, she was able to <b style="color: rgb(103, 216, 247); font-size: larger;">create connectivity matrices</b> that produce networks that are <b style="color: rgb(103, 216, 247); font-size: larger;"></b>stable, highly amplifying, Dalean and exhibit a wide range of dynamics</p> depending on which input (or initial condition) is passed to the network, very similar to the repertoire of <b style="color: rgb(103, 216, 247); font-size: larger;">dynamics observed experimentally in the motor cortex</b>.
+                        </p>
+                        <p>
+                            <b style="color: rgb(103, 216, 247); font-size: larger;">I took her methods</b>, implemented her network, and now <b style="color: rgb(103, 216, 247); font-size: larger;">my job is basically to break it :)</b>. Because these networks operate on the <b style="color: rgb(103, 216, 247); font-size: larger;">edge of instability</b> (otherwise they wouldn't be able to amplify any input), they are highly <b style="color: rgb(103, 216, 247); font-size: larger;">sensitive to perturbations</b> of the connectivity. Basically <b style="color: rgb(103, 216, 247); font-size: larger;">I'm lesioning the network</b>: I take out each element (neurons and synapses) one by one and <b style="color: rgb(103, 216, 247); font-size: larger;">measure the impact</b> the deletion has on both <b style="color: rgb(103, 216, 247); font-size: larger;">stability</b> (how much the <b style="color: rgb(103, 216, 247); font-size: larger;">spectral abscissa</b> as well as the whole eigenspectrum move) and <b style="color: rgb(103, 216, 247); font-size: larger;">dynamics</b> (how different the dynamics become from the intact network's dynamics). I'm also doing a similar thing but <b style="color: rgb(103, 216, 247); font-size: larger;">under accumulation</b>: instead of measuring the impact of individual elements, I'm <b style="color: rgb(103, 216, 247); font-size: larger;">studying how dynamics and stability degrade</b> as perturbations accumulate.                               
+                        </p>
+                        <p>
+                            It seems like, on average, <b style="color: rgb(103, 216, 247); font-size: larger;">inhibitory elements are more important than excitatory ones</b>. In previous models, such as SOC networks, the inhibition was sculpted ad hoc through an optimization algorithm to produce the observed dynamics, so one could argue the stronger impact of inhibition was due to the way the network was built, meanwhile <b style="color: rgb(103, 216, 247); font-size: larger;">here the model is not trained</b> in any way, connections are mostly <b style="color: rgb(103, 216, 247); font-size: larger;">random</b> except for the few <b style="color: rgb(103, 216, 247); font-size: larger;">constraints</b> they need to satisfy (Dalean connectivity and abscissa close to 1), therefore the stronger impact of inhibition is not a trivial result.
+                        </p>
+                        <p>
+                            One of the most fascinating things I've noticed is that <b style="color: rgb(103, 216, 247); font-size: larger;">the removal of some synapses has a larger impact on network properties than the removal of either of the neurons that participate in it</b>. While I'm still investigating this phenomenon, I've found out that for a large portion of these elements the phenomenon is <b style="color: rgb(103, 216, 247); font-size: larger;">due to the structure</b> of the surrounding portion of the network: when both neurons participate in what I call an <b style="color: rgb(103, 216, 247); font-size: larger;">"8 structure"</b> (2 excitatory loops connected by a synapse between a neuron in a loop and a neuron in the other), the <b style="color: rgb(103, 216, 247); font-size: larger;">synapse is crucial to distribute the activity</b> between the two loops. Without the synapse, the loops are left intact but disconnected, and they're free to accumulate recurrent excitation without any form of mitigation. On the other hand, if we <b style="color: rgb(103, 216, 247); font-size: larger;">delete either of the neurons</b>, we are deleting the synapse as well obviously, but at the same time <b style="color: rgb(103, 216, 247); font-size: larger;">we are also disrupting one of the 2 excitatory loops</b>, which has a relatively <b style="color: rgb(103, 216, 247); font-size: larger;">stabilizing effect</b> on the network, therefore the total effect ends up being smaller than removing just that single synapse.                        </p>
+                        <p>
+                            Another interesting thing I've found out is that, while these networks are extremely sensitive to perturbation and even removing single synapses could bring the abscissa above the stability line, there is <b style="color: rgb(103, 216, 247); font-size: larger;">a specific order of perturbation that</b>, if followed, <b style="color: rgb(103, 216, 247); font-size: larger;">allows the network to remain under the stability line at all times</b> and the dynamics' degradation is more graceful than in all other cases.
+                        </p>
+                        <p>
+                            Right now I'm focusing on <b style="color: rgb(103, 216, 247); font-size: larger;">figuring out how the network can be rescued</b>: for instance, is there any plasticity rule/optimization algorithm that could help me re-route the activity on other available neurons or pathways, so that the dynamics are preserved? And if so, is there any way that could be implemented in a biological network as well, to treat for example neurodegenerative diseases such as ALS? This and more questions in the next episode of "Veronica at ISTA: Sleep is optional".
+                        </p>
+                        <p>
+                            To answer those questions, I'm conducting an <b style="color: rgb(103, 216, 247); font-size: larger;">analysis on connectivity motifs</b>, to see if some microcircuit configurations are more important than others and why. Aside from this, I'm also <b style="color: rgb(103, 216, 247); font-size: larger;">testing mechanisms such as homeostatic plasticity</b> as well as <b style="color: rgb(103, 216, 247); font-size: larger;">ALS therapeutics-inspired mechanisms</b>, such as increasing inhibition (done in ALS through magnetic stimulation) or decreasing excitation (done through pharmacological intervention). I'm also in the process of <b style="color: rgb(103, 216, 247); font-size: larger;">implementing an algorithm that will lesion the network following a progression similar to that observed in ALS</b>, to use later on as a <b style="color: rgb(103, 216, 247); font-size: larger;">gimmick</b> to test whether my compensatory mechanisms improve properties' retention in this scenario as well, and possibly to study whether I can find a mechanism that would make sure the network's degeneration follows the more graceful dynamics degradation curve I observed during my analysis.
+                        </p>
+                        <p> <b style="font-size: larger;"> Preliminary results from this project were presented during a poster session at the Bernstein Conference at the end of September, so, here's the link to <a href="Downloads\Poster Bernstein.pdf" download="Poster_Scozzi.pdf" style="color: rgb(103, 216, 247)";> download the poster! </a> </b> </p>
+                    </div>
+                </div>
+                <br>
+                <br>
+                <div class="text-center"><b style="color: rgb(103, 216, 247); font-size: larger;"><a href="index.html" style="color: rgb(103, 216, 247)">Back to Home Page!</a></b></div>
+            </div>
+        </div>
+        <br> 
+    </div>
+<br>
+<footer class="footer bg-black mt-auto mb-auto py-3 text-white text-center" style="font-family: MyCustomFont;">
+    <p class="mt-3">&reg; Veronica's Portfolio</p>
+</footer>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  // I tuoi 13 colori Viridis dal Verde al Viola
+  const viridis = [
+  '#fdca26', // 2. Oro / Ambra
+  '#fb9f3a', // 3. Arancio Plasma
+  '#ed7953', // 4. Salmone Scuro
+  '#d8576b', // 5. Corallo / Magenta
+  '#bd4180', // 6. Fucsia Profondo
+  '#9c179e', // 7. Viola Elettrico
+  '#7b02a8', // 8. Indaco Saturo
+  '#5d01a8', // 9. Ultravioletto
+  '#3e049c', // 10. Blu Notte Elettrico
+  '#220790', // 11. Oltremare Scuro
+  '#0d0887', // 12. Blu Abisso
+];
+  
+  // Seleziona SOLO gli elementi che hanno un attributo "style" che definisce un colore
+  // Funziona sia che siano tag <a>, <b>, <span> o titoli
+  const coloredElements = Array.from(document.querySelectorAll('[style*="color"]'));
+  
+  // Distribuisce i colori Viridis in modo proporzionale lungo la pagina
+  coloredElements.forEach((el, index) => {
+    const colorIndex = Math.floor((index / coloredElements.length) * viridis.length);
+    el.style.color = viridis[colorIndex];
+  });
+</script>
+</body>
+</html>
